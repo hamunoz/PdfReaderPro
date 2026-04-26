@@ -43,6 +43,7 @@ data class ReaderState(
     val searchQuery: String = "",
     val isSearching: Boolean = false,
     val searchResultCount: Int = 0,
+    // 1-based: 1 = first match, searchResultCount = last match. 0 means no selection.
     val currentSearchIndex: Int = 0,
 
     // Table of Contents & Attachments

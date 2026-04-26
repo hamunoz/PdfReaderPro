@@ -176,7 +176,7 @@ fun FloatingSearchBar(
                             )
                         } else if (resultCount > 0) {
                             ResultCountChip(
-                                current = currentIndex + 1,
+                                current = currentIndex,
                                 total = resultCount,
                                 accentColor = AccentGreen
                             )
@@ -194,13 +194,13 @@ fun FloatingSearchBar(
                         SearchNavButton(
                             icon = Icons.Rounded.KeyboardArrowUp,
                             onClick = onPreviousResult,
-                            enabled = currentIndex > 0,
+                            enabled = currentIndex > 1,
                             contentColor = contentColor
                         )
                         SearchNavButton(
                             icon = Icons.Rounded.KeyboardArrowDown,
                             onClick = onNextResult,
-                            enabled = currentIndex < resultCount - 1,
+                            enabled = currentIndex < resultCount,
                             contentColor = contentColor
                         )
                     }

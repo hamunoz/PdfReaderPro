@@ -403,14 +403,29 @@ function showDocumentProperties() {
     documentProperties.click();
 }
 
+let lastFindQuery = "";
+let lastFindOptions = {
+    caseSensitive: false,
+    entireWord: false,
+    highlightAll: true,
+    matchDiacritics: false,
+};
+
 function startFind(searchTerm) {
     if (findInput) {
         findInput.value = searchTerm;
 
         const caseSensitive = findMatchCase?.checked || false;
         const entireWord = findEntireWord?.checked || false;
-        const highlightAll = findHighlightAll?.checked || false;
+        // Force highlightAll so PDF.js extracts text from every page up front
+        // and builds a complete global match list. Without this, matches are
+        // only computed on visited pages and arrow navigation traverses a
+        // subset of the document in non-deterministic order.
+        const highlightAll = true;
         const matchDiacritics = findMatchDiacritics?.checked || false;
+
+        lastFindQuery = searchTerm;
+        lastFindOptions = { caseSensitive, entireWord, highlightAll, matchDiacritics };
 
         PDFViewerApplication.eventBus.dispatch("find", {
             source: this,
@@ -429,6 +444,7 @@ function startFind(searchTerm) {
 }
 
 function stopFind() {
+    lastFindQuery = "";
     PDFViewerApplication.eventBus.dispatch("find", {
         source: this,
         type: "",
@@ -441,12 +457,34 @@ function stopFind() {
     });
 }
 
+function dispatchFindAgain(findPrevious) {
+    if (!lastFindQuery) {
+        // No active query — fall back to clicking the toolbar button (which
+        // is a no-op when the toolbar isn't open, but avoids dispatching an
+        // empty find).
+        const button = findPrevious ? findPreviousButton : findNextButton;
+        if (button) button.click();
+        return;
+    }
+    PDFViewerApplication.eventBus.dispatch("find", {
+        source: this,
+        type: "again",
+        query: lastFindQuery,
+        phraseSearch: false,
+        caseSensitive: lastFindOptions.caseSensitive,
+        entireWord: lastFindOptions.entireWord,
+        highlightAll: lastFindOptions.highlightAll,
+        matchDiacritics: lastFindOptions.matchDiacritics,
+        findPrevious: findPrevious,
+    });
+}
+
 function findNext() {
-    findNextButton.click();
+    dispatchFindAgain(false);
 }
 
 function findPrevious() {
-    findPreviousButton.click();
+    dispatchFindAgain(true);
 }
 
 function submitPassword(inpPassword) {
