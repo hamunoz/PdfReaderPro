@@ -20,6 +20,7 @@ data class AppPreferences(
     val readerKeepScreenOn: Boolean = false,
     val readerTheme: ReadingTheme = ReadingTheme.LIGHT,
     val readerSnapToPages: Boolean = false,
+    val readerScrubberOnScroll: Boolean = false,
     val readerScreenOrientation: ScreenOrientation = ScreenOrientation.AUTO
 )
 

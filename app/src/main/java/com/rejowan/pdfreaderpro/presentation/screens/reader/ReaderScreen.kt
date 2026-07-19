@@ -399,7 +399,10 @@ fun ReaderScreen(
                 // Page scrubber (shows with toolbar OR when scrolling in immersive mode)
                 // Vertical scrubber on right edge for vertical scroll mode
                 // Horizontal scrubber above bottom bar for horizontal scroll mode
-                val showScrubber = (state.isToolbarVisible && !state.isSearchActive && !state.isFullScreen) || isScrolling
+                // When the toolbar is hidden, the scroll-triggered scrubber is
+                // gated by the user's "scrubber on scroll" preference.
+                val showScrubber = (state.isToolbarVisible && !state.isSearchActive && !state.isFullScreen) ||
+                    (isScrolling && state.scrubberOnScroll)
                 val isHorizontalScroll = state.scrollMode == ScrollMode.HORIZONTAL
 
                 // When toolbar visible: above control bar. When hidden: just above system nav
@@ -533,6 +536,7 @@ fun ReaderScreen(
             currentScrollMode = state.scrollMode,
             isSnapEnabled = state.isSnapEnabled,
             isAutoHideToolbar = state.autoHideToolbar,
+            isScrubberOnScroll = state.scrubberOnScroll,
             onScrollModeChange = { mode ->
                 viewModel.onAction(ReaderAction.SetScrollMode(mode))
             },
@@ -541,6 +545,9 @@ fun ReaderScreen(
             },
             onAutoHideToolbarToggle = { enabled ->
                 viewModel.onAction(ReaderAction.SetAutoHideToolbar(enabled))
+            },
+            onScrubberOnScrollToggle = { enabled ->
+                viewModel.onAction(ReaderAction.SetScrubberOnScroll(enabled))
             },
             onDismiss = { viewModel.onAction(ReaderAction.HideViewModeSheet) }
         )

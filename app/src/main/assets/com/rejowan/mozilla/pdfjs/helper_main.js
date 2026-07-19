@@ -200,6 +200,28 @@ function setupHelper() {
     PDFViewerApplication.findBar.highlightAll.click();
     PDFViewerApplication.pdfSidebar.close();
 
+    // Center the active match in the viewport instead of pinning it ~50px
+    // below the top (PDF.js's MATCH_SCROLL_OFFSET_TOP). The original scroll
+    // runs first to keep PDF.js's internal state consistent, then we
+    // recenter by adjusting scrollTop by the delta between the element's
+    // center and the container's center.
+    const findController = PDFViewerApplication.findController;
+    const originalScrollMatchIntoView = findController.scrollMatchIntoView.bind(findController);
+    findController.scrollMatchIntoView = function (args) {
+        const willScroll = this._scrollMatches && !!args.element &&
+            args.matchIndex !== -1 && args.matchIndex === this._selected.matchIdx &&
+            args.pageIndex !== -1 && args.pageIndex === this._selected.pageIdx;
+        originalScrollMatchIntoView(args);
+        if (!willScroll) return;
+        const container = document.getElementById("viewerContainer");
+        if (!container) return;
+        const elementRect = args.element.getBoundingClientRect();
+        const containerRect = container.getBoundingClientRect();
+        const elementCenterY = (elementRect.top + elementRect.bottom) / 2;
+        const containerCenterY = (containerRect.top + containerRect.bottom) / 2;
+        container.scrollTop += elementCenterY - containerCenterY;
+    };
+
     PDFViewerApplication.eventBus.on("scalechanging", (event) => {
         const { scale } = event;
         JWI.onScaleChange(scale, PDFViewerApplication.pdfViewer.currentScaleValue);

@@ -82,6 +82,7 @@ class ReaderViewModel(
                     scrollMode = mapDomainScrollMode(prefs.readerScrollMode),
                     readingTheme = mapDomainReadingTheme(prefs.readerTheme),
                     autoHideToolbar = prefs.readerAutoHideToolbar,
+                    scrubberOnScroll = prefs.readerScrubberOnScroll,
                     keepScreenOn = prefs.readerKeepScreenOn,
                     isSnapEnabled = prefs.readerSnapToPages,
                     screenOrientation = mapDomainScreenOrientation(prefs.readerScreenOrientation),
@@ -560,6 +561,13 @@ class ReaderViewModel(
                 _state.update { it.copy(autoHideToolbar = action.enabled) }
                 viewModelScope.launch {
                     preferencesRepository.setReaderAutoHideToolbar(action.enabled)
+                }
+            }
+
+            is ReaderAction.SetScrubberOnScroll -> {
+                _state.update { it.copy(scrubberOnScroll = action.enabled) }
+                viewModelScope.launch {
+                    preferencesRepository.setReaderScrubberOnScroll(action.enabled)
                 }
             }
 

@@ -742,6 +742,8 @@
     <string name="scroll_speed_limit_desc">Prevent accidental page skipping</string>
     <string name="auto_hide_toolbar">Auto-Hide Toolbar</string>
     <string name="auto_hide_toolbar_desc">Hide toolbar after 5 seconds</string>
+    <string name="scrubber_on_scroll">Page Slider on Scroll</string>
+    <string name="scrubber_on_scroll_desc">Show the page slider while scrolling when the toolbar is hidden</string>
 
     <!-- Display Sheet -->
     <string name="display_settings">Display Settings</string>

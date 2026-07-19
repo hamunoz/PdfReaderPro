@@ -47,6 +47,7 @@ import com.rejowan.pdfreaderpro.presentation.components.pdf.resource.PdfViewerRe
 import com.rejowan.pdfreaderpro.presentation.components.pdf.resource.ResourceLoader
 import com.rejowan.pdfreaderpro.presentation.components.pdf.setting.UiSettings
 import com.rejowan.pdfreaderpro.R
+import org.json.JSONObject
 import java.io.File
 import kotlin.math.abs
 
@@ -1128,7 +1129,18 @@ class PdfViewer @JvmOverloads constructor(
         currentSource = url
 
         listeners.forEach { it.onPageLoadStart() }
-        webView callDirectly "openUrl"("{url: '$url', originalUrl: '$originalUrl'}")
+        // Build the argument object as JSON rather than a hand-written
+        // single-quoted literal. Paths/URIs can contain characters that
+        // Uri.encode() leaves untouched (notably the apostrophe '), which
+        // would break out of the '...' string and produce a JS SyntaxError,
+        // leaving the document silently stuck on the loading screen. JSON
+        // escaping handles those correctly, and JSON object syntax is valid
+        // JS so openUrl() still receives a proper {url, originalUrl} object.
+        val arg = JSONObject().apply {
+            put("url", url)
+            put("originalUrl", originalUrl)
+        }.toString()
+        webView callDirectly "openUrl"(arg)
     }
 
     /**

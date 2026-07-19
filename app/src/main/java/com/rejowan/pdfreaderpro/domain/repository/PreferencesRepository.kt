@@ -33,5 +33,6 @@ interface PreferencesRepository {
     suspend fun setReaderKeepScreenOn(enabled: Boolean)
     suspend fun setReaderTheme(theme: ReadingTheme)
     suspend fun setReaderSnapToPages(enabled: Boolean)
+    suspend fun setReaderScrubberOnScroll(enabled: Boolean)
     suspend fun setReaderScreenOrientation(orientation: ScreenOrientation)
 }
