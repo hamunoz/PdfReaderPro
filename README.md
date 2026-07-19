@@ -219,6 +219,13 @@ GNU General Public License for more details.
 
 ## Changelog
 
+### v2.3.0 (2026-07-19)
+
+- Setting to hide the page slider that appears while scrolling (#54)
+- In-PDF search now steps through every match across all pages, with the active match centered (#40)
+- Fixed some PDFs failing to open when the file path contained an apostrophe (#57)
+- Updated core libraries (Kotlin 2.4.10, AGP 9.2.1, Android SDK 37)
+
 ### v2.2.0 (2026-04-23)
 
 - AMOLED black theme option (Appearance → Theme)
