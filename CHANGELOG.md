@@ -9,6 +9,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.3.0] - 2026-07-19
+
+### Added
+- **Page Slider on Scroll** - Setting (View Mode sheet) to control whether the page slider appears while scrolling when the toolbar is hidden; off by default (closes #54)
+
+### Changed
+- **In-PDF Search Navigation** - Next/previous now steps through every match across all pages reliably, and the active match is centered in the view (#40)
+- **Dependency Updates** - Kotlin 2.4.10, AGP 9.2.1, Android compile/target SDK 37, Compose BOM, and other core libraries
+
+### Fixed
+- **PDF Open Failure** - PDFs whose file path contained an apostrophe no longer get stuck on the loading screen (closes #57)
+
+---
+
 ## [2.2.0] - 2026-04-23
 
 ### Added
