@@ -1875,9 +1875,24 @@ private fun ChangelogContent() {
                 .verticalScroll(rememberScrollState())
         ) {
             ChangelogVersionItem(
+                version = "2.3.0",
+                date = "July 2026",
+                isLatest = true,
+                changes = listOf(
+                    "Setting to hide the page slider that appears while scrolling",
+                    "In-PDF search now steps through every match across all pages",
+                    "Active search match is centered in the view",
+                    "Fixed some PDFs failing to open when the file path had an apostrophe",
+                    "Updated core libraries (Kotlin, AGP, Android SDK 37)"
+                )
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            ChangelogVersionItem(
                 version = "2.2.0",
                 date = "April 2026",
-                isLatest = true,
+                isLatest = false,
                 changes = listOf(
                     "AMOLED black theme option",
                     "Customizable double-tap zoom level (1.1×–5×)",

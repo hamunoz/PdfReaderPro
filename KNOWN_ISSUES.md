@@ -34,6 +34,15 @@ This document lists known issues and limitations in PDF Reader Pro, along with w
 
 ---
 
+### Search or copy returns wrong text in some non-English PDFs
+**Issue:** In some PDFs (often Indic scripts such as Hindi, Bengali, or Gujarati) the text renders correctly, but search, text selection, and copy return incorrect or scrambled characters. This happens when the PDF's embedded fonts carry an incomplete or incorrect `/ToUnicode` map — the correct characters are simply not stored in the file, so no reader can recover them.
+
+**Workaround:** Re-generate the PDF with a tool that embeds proper Unicode data (for example, "Print → Save as PDF" from Chrome). Note this affects every PDF viewer (including Adobe Reader and Chrome), not just this app.
+
+**Status:** Limitation of the PDF file itself, not fixable in the reader (#40)
+
+---
+
 ## PDF Tools
 
 ### Password-protected PDFs cannot be merged
@@ -133,7 +142,9 @@ Issues that have been fixed in recent releases:
 | Remember password not auto-filling (#43) | v2.2.0 | Saved password is now auto-submitted on reopen; stale entries cleaned up |
 | Double-tap zoom locked to 200% and top-left anchored (#42) | v2.2.0 | Zoom level is configurable (1.1×–5×) and now centers on the tapped point |
 | Reader/home chrome ignoring app theme | v2.2.0 | Colors routed through Material color scheme so Dark/Black themes apply |
+| PDFs with an apostrophe in the file path not opening (#57) | v2.3.0 | Fixed JS argument escaping so the document loads |
+| In-PDF search skipping matches / erratic arrow navigation | v2.3.0 | Search now traverses every match across all pages, with the active match centered |
 
 ---
 
-*Last updated: 2026-04-23*
+*Last updated: 2026-07-19*
