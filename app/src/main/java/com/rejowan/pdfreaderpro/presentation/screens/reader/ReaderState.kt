@@ -81,6 +81,9 @@ data class ReaderState(
     // Auto-hide toolbar
     val autoHideToolbar: Boolean = false,
 
+    // Show the page scrubber on scroll while the toolbar is hidden
+    val scrubberOnScroll: Boolean = false,
+
     // PDF info dialog
     val isInfoDialogVisible: Boolean = false,
 
@@ -212,6 +215,7 @@ sealed class ReaderAction {
     data class SetScreenOrientation(val orientation: ScreenOrientation) : ReaderAction()
     data class SetReadingTheme(val theme: ReadingTheme) : ReaderAction()
     data class SetAutoHideToolbar(val enabled: Boolean) : ReaderAction()
+    data class SetScrubberOnScroll(val enabled: Boolean) : ReaderAction()
     data class OpenLink(val url: String) : ReaderAction()
 
     // Search

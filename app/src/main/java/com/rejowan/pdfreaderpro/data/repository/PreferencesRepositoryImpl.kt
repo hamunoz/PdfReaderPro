@@ -43,6 +43,7 @@ class PreferencesRepositoryImpl(
         val READER_KEEP_SCREEN_ON = booleanPreferencesKey("reader_keep_screen_on")
         val READER_THEME = stringPreferencesKey("reader_theme")
         val READER_SNAP_TO_PAGES = booleanPreferencesKey("reader_snap_to_pages")
+        val READER_SCRUBBER_ON_SCROLL = booleanPreferencesKey("reader_scrubber_on_scroll")
         val READER_SCREEN_ORIENTATION = stringPreferencesKey("reader_screen_orientation")
     }
 
@@ -67,6 +68,7 @@ class PreferencesRepositoryImpl(
             readerKeepScreenOn = prefs[Keys.READER_KEEP_SCREEN_ON] ?: false,
             readerTheme = prefs[Keys.READER_THEME]?.let { ReadingTheme.valueOf(it) } ?: ReadingTheme.LIGHT,
             readerSnapToPages = prefs[Keys.READER_SNAP_TO_PAGES] ?: false,
+            readerScrubberOnScroll = prefs[Keys.READER_SCRUBBER_ON_SCROLL] ?: false,
             readerScreenOrientation = prefs[Keys.READER_SCREEN_ORIENTATION]?.let { ScreenOrientation.valueOf(it) } ?: ScreenOrientation.AUTO
         )
     }
@@ -115,6 +117,10 @@ class PreferencesRepositoryImpl(
 
     override suspend fun setReaderAutoHideToolbar(enabled: Boolean) {
         dataStore.edit { it[Keys.READER_AUTO_HIDE_TOOLBAR] = enabled }
+    }
+
+    override suspend fun setReaderScrubberOnScroll(enabled: Boolean) {
+        dataStore.edit { it[Keys.READER_SCRUBBER_ON_SCROLL] = enabled }
     }
 
     override suspend fun setReaderQuickZoomPreset(preset: QuickZoomPreset) {

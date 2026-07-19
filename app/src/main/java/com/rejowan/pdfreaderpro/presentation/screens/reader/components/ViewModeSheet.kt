@@ -37,6 +37,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.rounded.GridView
+import androidx.compose.material.icons.rounded.LinearScale
 import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material.icons.rounded.SwapVert
 import androidx.compose.material.icons.rounded.Timer
@@ -83,9 +84,11 @@ fun ViewModeSheet(
     currentScrollMode: ScrollMode,
     isSnapEnabled: Boolean,
     isAutoHideToolbar: Boolean,
+    isScrubberOnScroll: Boolean,
     onScrollModeChange: (ScrollMode) -> Unit,
     onSnapToggle: (Boolean) -> Unit,
     onAutoHideToolbarToggle: (Boolean) -> Unit,
+    onScrubberOnScrollToggle: (Boolean) -> Unit,
     onDismiss: () -> Unit
 ) {
     val configuration = LocalConfiguration.current
@@ -96,9 +99,11 @@ fun ViewModeSheet(
             currentScrollMode = currentScrollMode,
             isSnapEnabled = isSnapEnabled,
             isAutoHideToolbar = isAutoHideToolbar,
+            isScrubberOnScroll = isScrubberOnScroll,
             onScrollModeChange = onScrollModeChange,
             onSnapToggle = onSnapToggle,
             onAutoHideToolbarToggle = onAutoHideToolbarToggle,
+            onScrubberOnScrollToggle = onScrubberOnScrollToggle,
             onDismiss = onDismiss
         )
     } else {
@@ -106,9 +111,11 @@ fun ViewModeSheet(
             currentScrollMode = currentScrollMode,
             isSnapEnabled = isSnapEnabled,
             isAutoHideToolbar = isAutoHideToolbar,
+            isScrubberOnScroll = isScrubberOnScroll,
             onScrollModeChange = onScrollModeChange,
             onSnapToggle = onSnapToggle,
             onAutoHideToolbarToggle = onAutoHideToolbarToggle,
+            onScrubberOnScrollToggle = onScrubberOnScrollToggle,
             onDismiss = onDismiss
         )
     }
@@ -120,9 +127,11 @@ private fun ViewModeBottomSheet(
     currentScrollMode: ScrollMode,
     isSnapEnabled: Boolean,
     isAutoHideToolbar: Boolean,
+    isScrubberOnScroll: Boolean,
     onScrollModeChange: (ScrollMode) -> Unit,
     onSnapToggle: (Boolean) -> Unit,
     onAutoHideToolbarToggle: (Boolean) -> Unit,
+    onScrubberOnScrollToggle: (Boolean) -> Unit,
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState()
@@ -138,9 +147,11 @@ private fun ViewModeBottomSheet(
             currentScrollMode = currentScrollMode,
             isSnapEnabled = isSnapEnabled,
             isAutoHideToolbar = isAutoHideToolbar,
+            isScrubberOnScroll = isScrubberOnScroll,
             onScrollModeChange = onScrollModeChange,
             onSnapToggle = onSnapToggle,
             onAutoHideToolbarToggle = onAutoHideToolbarToggle,
+            onScrubberOnScrollToggle = onScrubberOnScrollToggle,
             modifier = Modifier.padding(bottom = 24.dp)
         )
     }
@@ -151,9 +162,11 @@ private fun ViewModeSideSheet(
     currentScrollMode: ScrollMode,
     isSnapEnabled: Boolean,
     isAutoHideToolbar: Boolean,
+    isScrubberOnScroll: Boolean,
     onScrollModeChange: (ScrollMode) -> Unit,
     onSnapToggle: (Boolean) -> Unit,
     onAutoHideToolbarToggle: (Boolean) -> Unit,
+    onScrubberOnScrollToggle: (Boolean) -> Unit,
     onDismiss: () -> Unit
 ) {
     var isVisible by remember { mutableStateOf(false) }
@@ -205,9 +218,11 @@ private fun ViewModeSideSheet(
                     currentScrollMode = currentScrollMode,
                     isSnapEnabled = isSnapEnabled,
                     isAutoHideToolbar = isAutoHideToolbar,
+                    isScrubberOnScroll = isScrubberOnScroll,
                     onScrollModeChange = onScrollModeChange,
                     onSnapToggle = onSnapToggle,
                     onAutoHideToolbarToggle = onAutoHideToolbarToggle,
+                    onScrubberOnScrollToggle = onScrubberOnScrollToggle,
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(
@@ -226,9 +241,11 @@ private fun ViewModeSheetContent(
     currentScrollMode: ScrollMode,
     isSnapEnabled: Boolean,
     isAutoHideToolbar: Boolean,
+    isScrubberOnScroll: Boolean,
     onScrollModeChange: (ScrollMode) -> Unit,
     onSnapToggle: (Boolean) -> Unit,
     onAutoHideToolbarToggle: (Boolean) -> Unit,
+    onScrubberOnScrollToggle: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -300,6 +317,18 @@ private fun ViewModeSheetContent(
             onToggle = onAutoHideToolbarToggle,
             accentColor = AccentTeal,
             animationDelay = 200
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        ToggleRow(
+            icon = Icons.Rounded.LinearScale,
+            title = stringResource(R.string.scrubber_on_scroll),
+            description = stringResource(R.string.scrubber_on_scroll_desc),
+            isEnabled = isScrubberOnScroll,
+            onToggle = onScrubberOnScrollToggle,
+            accentColor = AccentTeal,
+            animationDelay = 250
         )
     }
 }
