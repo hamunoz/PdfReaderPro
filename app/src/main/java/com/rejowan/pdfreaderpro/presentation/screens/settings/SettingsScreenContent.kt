@@ -72,6 +72,7 @@ import androidx.compose.material.icons.rounded.StayCurrentLandscape
 import androidx.compose.material.icons.rounded.StayCurrentPortrait
 import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material.icons.rounded.SwapVert
+import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material.icons.rounded.ViewDay
 import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material.icons.rounded.Schedule
@@ -338,6 +339,18 @@ fun SettingsScreenContent(
             checked = preferences.readerSnapToPages,
             onCheckedChange = { viewModel.setReaderSnapToPages(it) },
             animationDelay = 385
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        SettingsToggleItem(
+            icon = Icons.Rounded.TouchApp,
+            title = stringResource(R.string.tap_to_turn_page),
+            subtitle = stringResource(R.string.tap_to_turn_page_desc),
+            accentColor = AccentBlue,
+            checked = preferences.readerTapToTurnPage,
+            onCheckedChange = { viewModel.setReaderTapToTurnPage(it) },
+            animationDelay = 392
         )
 
         Spacer(modifier = Modifier.height(8.dp))

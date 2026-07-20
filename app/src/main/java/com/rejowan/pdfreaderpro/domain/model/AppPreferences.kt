@@ -21,7 +21,8 @@ data class AppPreferences(
     val readerTheme: ReadingTheme = ReadingTheme.LIGHT,
     val readerSnapToPages: Boolean = false,
     val readerScrubberOnScroll: Boolean = false,
-    val readerScreenOrientation: ScreenOrientation = ScreenOrientation.AUTO
+    val readerScreenOrientation: ScreenOrientation = ScreenOrientation.AUTO,
+    val readerTapToTurnPage: Boolean = false
 )
 
 enum class ThemeMode {

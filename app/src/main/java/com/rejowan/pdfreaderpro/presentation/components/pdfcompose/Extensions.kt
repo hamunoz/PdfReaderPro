@@ -261,7 +261,7 @@ fun PdfState.rotationFlow(): Flow<PdfViewerView.PageRotation> = flowIt { emit ->
  */
 fun PdfState.singleClickFlow(): Flow<Unit> = flowIt { emit ->
     object : PdfListener {
-        override fun onSingleClick() {
+        override fun onSingleClick(x: Float, y: Float, width: Float, height: Float) {
             emit(Unit)
         }
     }

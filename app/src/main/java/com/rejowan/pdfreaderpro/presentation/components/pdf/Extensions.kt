@@ -114,7 +114,7 @@ fun PdfViewer.addListener(
     onScrollModeChange: ((scrollMode: PdfViewer.PageScrollMode) -> Unit)? = null,
     onSpreadModeChange: ((spreadMode: PdfViewer.PageSpreadMode) -> Unit)? = null,
     onRotationChange: ((rotation: PdfViewer.PageRotation) -> Unit)? = null,
-    onSingleClick: (() -> Unit)? = null,
+    onSingleClick: ((x: Float, y: Float, width: Float, height: Float) -> Unit)? = null,
     onDoubleClick: ((x: Float, y: Float) -> Unit)? = null,
     onLongClick: (() -> Unit)? = null,
     onLinkClick: ((link: String) -> Unit)? = null,
@@ -231,8 +231,8 @@ fun PdfViewer.addListener(
             onRotationChange?.invoke(rotation)
         }
 
-        override fun onSingleClick() {
-            onSingleClick?.invoke()
+        override fun onSingleClick(x: Float, y: Float, width: Float, height: Float) {
+            onSingleClick?.invoke(x, y, width, height)
         }
 
         override fun onDoubleClick(x: Float, y: Float) {

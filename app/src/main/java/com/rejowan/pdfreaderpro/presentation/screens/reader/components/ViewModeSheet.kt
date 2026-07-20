@@ -41,6 +41,7 @@ import androidx.compose.material.icons.rounded.LinearScale
 import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material.icons.rounded.SwapVert
 import androidx.compose.material.icons.rounded.Timer
+import androidx.compose.material.icons.rounded.TouchApp
 import androidx.compose.material.icons.rounded.ViewDay
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -85,10 +86,12 @@ fun ViewModeSheet(
     isSnapEnabled: Boolean,
     isAutoHideToolbar: Boolean,
     isScrubberOnScroll: Boolean,
+    isTapToTurnPage: Boolean,
     onScrollModeChange: (ScrollMode) -> Unit,
     onSnapToggle: (Boolean) -> Unit,
     onAutoHideToolbarToggle: (Boolean) -> Unit,
     onScrubberOnScrollToggle: (Boolean) -> Unit,
+    onTapToTurnPageToggle: (Boolean) -> Unit,
     onDismiss: () -> Unit
 ) {
     val configuration = LocalConfiguration.current
@@ -100,10 +103,12 @@ fun ViewModeSheet(
             isSnapEnabled = isSnapEnabled,
             isAutoHideToolbar = isAutoHideToolbar,
             isScrubberOnScroll = isScrubberOnScroll,
+            isTapToTurnPage = isTapToTurnPage,
             onScrollModeChange = onScrollModeChange,
             onSnapToggle = onSnapToggle,
             onAutoHideToolbarToggle = onAutoHideToolbarToggle,
             onScrubberOnScrollToggle = onScrubberOnScrollToggle,
+            onTapToTurnPageToggle = onTapToTurnPageToggle,
             onDismiss = onDismiss
         )
     } else {
@@ -112,10 +117,12 @@ fun ViewModeSheet(
             isSnapEnabled = isSnapEnabled,
             isAutoHideToolbar = isAutoHideToolbar,
             isScrubberOnScroll = isScrubberOnScroll,
+            isTapToTurnPage = isTapToTurnPage,
             onScrollModeChange = onScrollModeChange,
             onSnapToggle = onSnapToggle,
             onAutoHideToolbarToggle = onAutoHideToolbarToggle,
             onScrubberOnScrollToggle = onScrubberOnScrollToggle,
+            onTapToTurnPageToggle = onTapToTurnPageToggle,
             onDismiss = onDismiss
         )
     }
@@ -128,10 +135,12 @@ private fun ViewModeBottomSheet(
     isSnapEnabled: Boolean,
     isAutoHideToolbar: Boolean,
     isScrubberOnScroll: Boolean,
+    isTapToTurnPage: Boolean,
     onScrollModeChange: (ScrollMode) -> Unit,
     onSnapToggle: (Boolean) -> Unit,
     onAutoHideToolbarToggle: (Boolean) -> Unit,
     onScrubberOnScrollToggle: (Boolean) -> Unit,
+    onTapToTurnPageToggle: (Boolean) -> Unit,
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState()
@@ -148,10 +157,12 @@ private fun ViewModeBottomSheet(
             isSnapEnabled = isSnapEnabled,
             isAutoHideToolbar = isAutoHideToolbar,
             isScrubberOnScroll = isScrubberOnScroll,
+            isTapToTurnPage = isTapToTurnPage,
             onScrollModeChange = onScrollModeChange,
             onSnapToggle = onSnapToggle,
             onAutoHideToolbarToggle = onAutoHideToolbarToggle,
             onScrubberOnScrollToggle = onScrubberOnScrollToggle,
+            onTapToTurnPageToggle = onTapToTurnPageToggle,
             modifier = Modifier.padding(bottom = 24.dp)
         )
     }
@@ -163,10 +174,12 @@ private fun ViewModeSideSheet(
     isSnapEnabled: Boolean,
     isAutoHideToolbar: Boolean,
     isScrubberOnScroll: Boolean,
+    isTapToTurnPage: Boolean,
     onScrollModeChange: (ScrollMode) -> Unit,
     onSnapToggle: (Boolean) -> Unit,
     onAutoHideToolbarToggle: (Boolean) -> Unit,
     onScrubberOnScrollToggle: (Boolean) -> Unit,
+    onTapToTurnPageToggle: (Boolean) -> Unit,
     onDismiss: () -> Unit
 ) {
     var isVisible by remember { mutableStateOf(false) }
@@ -219,10 +232,12 @@ private fun ViewModeSideSheet(
                     isSnapEnabled = isSnapEnabled,
                     isAutoHideToolbar = isAutoHideToolbar,
                     isScrubberOnScroll = isScrubberOnScroll,
+                    isTapToTurnPage = isTapToTurnPage,
                     onScrollModeChange = onScrollModeChange,
                     onSnapToggle = onSnapToggle,
                     onAutoHideToolbarToggle = onAutoHideToolbarToggle,
                     onScrubberOnScrollToggle = onScrubberOnScrollToggle,
+                    onTapToTurnPageToggle = onTapToTurnPageToggle,
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(
@@ -242,10 +257,12 @@ private fun ViewModeSheetContent(
     isSnapEnabled: Boolean,
     isAutoHideToolbar: Boolean,
     isScrubberOnScroll: Boolean,
+    isTapToTurnPage: Boolean,
     onScrollModeChange: (ScrollMode) -> Unit,
     onSnapToggle: (Boolean) -> Unit,
     onAutoHideToolbarToggle: (Boolean) -> Unit,
     onScrubberOnScrollToggle: (Boolean) -> Unit,
+    onTapToTurnPageToggle: (Boolean) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -329,6 +346,18 @@ private fun ViewModeSheetContent(
             onToggle = onScrubberOnScrollToggle,
             accentColor = AccentTeal,
             animationDelay = 250
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        ToggleRow(
+            icon = Icons.Rounded.TouchApp,
+            title = stringResource(R.string.tap_to_turn_page),
+            description = stringResource(R.string.tap_to_turn_page_desc),
+            isEnabled = isTapToTurnPage,
+            onToggle = onTapToTurnPageToggle,
+            accentColor = AccentTeal,
+            animationDelay = 300
         )
     }
 }

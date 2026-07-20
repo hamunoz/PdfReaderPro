@@ -83,6 +83,7 @@ class ReaderViewModel(
                     readingTheme = mapDomainReadingTheme(prefs.readerTheme),
                     autoHideToolbar = prefs.readerAutoHideToolbar,
                     scrubberOnScroll = prefs.readerScrubberOnScroll,
+                    tapToTurnPage = prefs.readerTapToTurnPage,
                     keepScreenOn = prefs.readerKeepScreenOn,
                     isSnapEnabled = prefs.readerSnapToPages,
                     screenOrientation = mapDomainScreenOrientation(prefs.readerScreenOrientation),
@@ -275,8 +276,8 @@ class ReaderViewModel(
                     }
                 }
             },
-            onSingleClick = {
-                onAction(ReaderAction.ToggleToolbar)
+            onSingleClick = { x, y, width, height ->
+                onAction(ReaderAction.TapToTurnOrToggle(x, y, width, height))
             },
             onDoubleClick = { x, y ->
                 viewer.let { v ->
@@ -385,6 +386,39 @@ class ReaderViewModel(
         pdfViewer?.goToPage(item.page + 1)
     }
 
+    /**
+     * Handles a single tap on the page. When tap-to-turn is enabled and the tap lands in an
+     * edge zone, navigate between pages; otherwise fall back to toggling the toolbar.
+     *
+     * The turn direction follows the scroll orientation: vertical scrolling uses the top and
+     * bottom thirds (top = previous, bottom = next), horizontal scrolling uses the left and
+     * right thirds (left = previous, right = next). The middle third always toggles the toolbar.
+     */
+    private fun handleTapToTurnOrToggle(action: ReaderAction.TapToTurnOrToggle) {
+        val state = _state.value
+
+        // Fall back to toolbar toggle when the feature is off, auto-scroll is running
+        // (tap should pause instead), or dimensions are missing (avoid divide-by-zero).
+        if (!state.tapToTurnPage || state.isAutoScrollActive ||
+            action.width <= 0f || action.height <= 0f
+        ) {
+            onAction(ReaderAction.ToggleToolbar)
+            return
+        }
+
+        val position = if (state.scrollMode == ScrollMode.HORIZONTAL) {
+            action.x / action.width
+        } else {
+            action.y / action.height
+        }
+
+        when {
+            position < TAP_TURN_ZONE_FRACTION -> onAction(ReaderAction.PreviousPage)
+            position > 1f - TAP_TURN_ZONE_FRACTION -> onAction(ReaderAction.NextPage)
+            else -> onAction(ReaderAction.ToggleToolbar)
+        }
+    }
+
     private suspend fun addToRecent() {
         val file = File(pdfPath)
         recentRepository.addOrUpdateRecent(
@@ -409,6 +443,7 @@ class ReaderViewModel(
             is ReaderAction.PreviousPage -> {
                 pdfViewer?.goToPreviousPage()
             }
+            is ReaderAction.TapToTurnOrToggle -> handleTapToTurnOrToggle(action)
 
             is ReaderAction.SetZoom -> {
                 _state.update { it.copy(zoom = action.zoom.coerceIn(it.minZoom, it.maxZoom)) }
@@ -568,6 +603,13 @@ class ReaderViewModel(
                 _state.update { it.copy(scrubberOnScroll = action.enabled) }
                 viewModelScope.launch {
                     preferencesRepository.setReaderScrubberOnScroll(action.enabled)
+                }
+            }
+
+            is ReaderAction.SetTapToTurnPage -> {
+                _state.update { it.copy(tapToTurnPage = action.enabled) }
+                viewModelScope.launch {
+                    preferencesRepository.setReaderTapToTurnPage(action.enabled)
                 }
             }
 
@@ -984,5 +1026,11 @@ class ReaderViewModel(
 
     fun getDocumentFileName(): String {
         return File(pdfPath).name
+    }
+
+    private companion object {
+        // Fraction of the page's leading/trailing edge that acts as a page-turn tap zone.
+        // The middle (1 - 2 * fraction) toggles the toolbar instead.
+        const val TAP_TURN_ZONE_FRACTION = 1f / 3f
     }
 }

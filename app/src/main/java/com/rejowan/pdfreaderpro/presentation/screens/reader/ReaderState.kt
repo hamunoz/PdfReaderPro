@@ -84,6 +84,9 @@ data class ReaderState(
     // Show the page scrubber on scroll while the toolbar is hidden
     val scrubberOnScroll: Boolean = false,
 
+    // Tap the sides of the page to move between pages
+    val tapToTurnPage: Boolean = false,
+
     // PDF info dialog
     val isInfoDialogVisible: Boolean = false,
 
@@ -171,6 +174,11 @@ sealed class ReaderAction {
     data object NextPage : ReaderAction()
     data object PreviousPage : ReaderAction()
 
+    // A single tap on the page: turn the page when tap-to-turn is enabled and the tap
+    // lands in an edge zone, otherwise toggle the toolbar. Coordinates and dimensions are
+    // in CSS pixels relative to the viewer container's top-left.
+    data class TapToTurnOrToggle(val x: Float, val y: Float, val width: Float, val height: Float) : ReaderAction()
+
     // Zoom
     data class SetZoom(val zoom: Float) : ReaderAction()
     data object ZoomIn : ReaderAction()
@@ -216,6 +224,7 @@ sealed class ReaderAction {
     data class SetReadingTheme(val theme: ReadingTheme) : ReaderAction()
     data class SetAutoHideToolbar(val enabled: Boolean) : ReaderAction()
     data class SetScrubberOnScroll(val enabled: Boolean) : ReaderAction()
+    data class SetTapToTurnPage(val enabled: Boolean) : ReaderAction()
     data class OpenLink(val url: String) : ReaderAction()
 
     // Search

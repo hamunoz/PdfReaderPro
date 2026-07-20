@@ -346,4 +346,10 @@ class SettingsViewModel(
             preferencesRepository.setReaderScreenOrientation(orientation)
         }
     }
+
+    fun setReaderTapToTurnPage(enabled: Boolean) {
+        viewModelScope.launch {
+            preferencesRepository.setReaderTapToTurnPage(enabled)
+        }
+    }
 }
