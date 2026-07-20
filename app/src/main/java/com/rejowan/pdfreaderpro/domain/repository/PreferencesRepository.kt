@@ -35,4 +35,5 @@ interface PreferencesRepository {
     suspend fun setReaderSnapToPages(enabled: Boolean)
     suspend fun setReaderScrubberOnScroll(enabled: Boolean)
     suspend fun setReaderScreenOrientation(orientation: ScreenOrientation)
+    suspend fun setReaderTapToTurnPage(enabled: Boolean)
 }

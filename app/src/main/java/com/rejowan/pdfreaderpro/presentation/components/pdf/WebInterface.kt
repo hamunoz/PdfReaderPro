@@ -113,8 +113,8 @@ internal class WebInterface(private val pdfViewer: PdfViewer) {
     }
 
     @JavascriptInterface
-    fun onSingleClick() = post {
-        pdfViewer.listeners.forEach { it.onSingleClick() }
+    fun onSingleClick(x: Float, y: Float, width: Float, height: Float) = post {
+        pdfViewer.listeners.forEach { it.onSingleClick(x, y, width, height) }
     }
 
     @JavascriptInterface

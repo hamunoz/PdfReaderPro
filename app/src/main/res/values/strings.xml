@@ -744,6 +744,8 @@
     <string name="auto_hide_toolbar_desc">Hide toolbar after 5 seconds</string>
     <string name="scrubber_on_scroll">Page Slider on Scroll</string>
     <string name="scrubber_on_scroll_desc">Show the page slider while scrolling when the toolbar is hidden</string>
+    <string name="tap_to_turn_page">Tap to Turn Page</string>
+    <string name="tap_to_turn_page_desc">Tap the sides of the page to move between pages</string>
 
     <!-- Display Sheet -->
     <string name="display_settings">Display Settings</string>

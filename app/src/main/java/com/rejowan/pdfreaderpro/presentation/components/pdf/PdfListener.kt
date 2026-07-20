@@ -144,8 +144,12 @@ interface PdfListener {
 
     /**
      * Called on a single tap on the view.
+     * @param x The tap X coordinate in CSS pixels, relative to the viewer container's top-left.
+     * @param y The tap Y coordinate in CSS pixels, relative to the viewer container's top-left.
+     * @param width The viewer container's width in CSS pixels.
+     * @param height The viewer container's height in CSS pixels.
      */
-    fun onSingleClick() {}
+    fun onSingleClick(x: Float, y: Float, width: Float, height: Float) {}
 
     /**
      * Called on a double tap on the view.

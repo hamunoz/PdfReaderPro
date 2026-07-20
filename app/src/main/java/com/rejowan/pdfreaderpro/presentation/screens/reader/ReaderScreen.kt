@@ -537,6 +537,7 @@ fun ReaderScreen(
             isSnapEnabled = state.isSnapEnabled,
             isAutoHideToolbar = state.autoHideToolbar,
             isScrubberOnScroll = state.scrubberOnScroll,
+            isTapToTurnPage = state.tapToTurnPage,
             onScrollModeChange = { mode ->
                 viewModel.onAction(ReaderAction.SetScrollMode(mode))
             },
@@ -548,6 +549,9 @@ fun ReaderScreen(
             },
             onScrubberOnScrollToggle = { enabled ->
                 viewModel.onAction(ReaderAction.SetScrubberOnScroll(enabled))
+            },
+            onTapToTurnPageToggle = { enabled ->
+                viewModel.onAction(ReaderAction.SetTapToTurnPage(enabled))
             },
             onDismiss = { viewModel.onAction(ReaderAction.HideViewModeSheet) }
         )

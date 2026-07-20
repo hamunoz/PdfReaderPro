@@ -161,9 +161,12 @@ function doOnLast() {
         if (isContextMenuActive) {
             isContextMenuActive = false;
         } else if (e.detail === 1) {
+            const rect = viewerContainer.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
             singleClickTimer = setTimeout(() => {
                 if (e.target.tagName === "A") JWI.onLinkClick(e.target.href);
-                else JWI.onSingleClick();
+                else JWI.onSingleClick(x, y, rect.width, rect.height);
             }, DOUBLE_CLICK_THRESHOLD);
         }
     });

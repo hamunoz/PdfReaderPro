@@ -45,6 +45,7 @@ class PreferencesRepositoryImpl(
         val READER_SNAP_TO_PAGES = booleanPreferencesKey("reader_snap_to_pages")
         val READER_SCRUBBER_ON_SCROLL = booleanPreferencesKey("reader_scrubber_on_scroll")
         val READER_SCREEN_ORIENTATION = stringPreferencesKey("reader_screen_orientation")
+        val READER_TAP_TO_TURN_PAGE = booleanPreferencesKey("reader_tap_to_turn_page")
     }
 
     override val preferences: Flow<AppPreferences> = dataStore.data.map { prefs ->
@@ -69,7 +70,8 @@ class PreferencesRepositoryImpl(
             readerTheme = prefs[Keys.READER_THEME]?.let { ReadingTheme.valueOf(it) } ?: ReadingTheme.LIGHT,
             readerSnapToPages = prefs[Keys.READER_SNAP_TO_PAGES] ?: false,
             readerScrubberOnScroll = prefs[Keys.READER_SCRUBBER_ON_SCROLL] ?: false,
-            readerScreenOrientation = prefs[Keys.READER_SCREEN_ORIENTATION]?.let { ScreenOrientation.valueOf(it) } ?: ScreenOrientation.AUTO
+            readerScreenOrientation = prefs[Keys.READER_SCREEN_ORIENTATION]?.let { ScreenOrientation.valueOf(it) } ?: ScreenOrientation.AUTO,
+            readerTapToTurnPage = prefs[Keys.READER_TAP_TO_TURN_PAGE] ?: false
         )
     }
 
@@ -145,5 +147,9 @@ class PreferencesRepositoryImpl(
 
     override suspend fun setReaderScreenOrientation(orientation: ScreenOrientation) {
         dataStore.edit { it[Keys.READER_SCREEN_ORIENTATION] = orientation.name }
+    }
+
+    override suspend fun setReaderTapToTurnPage(enabled: Boolean) {
+        dataStore.edit { it[Keys.READER_TAP_TO_TURN_PAGE] = enabled }
     }
 }
