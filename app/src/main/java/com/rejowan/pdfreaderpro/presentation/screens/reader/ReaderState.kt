@@ -1,6 +1,8 @@
 package com.rejowan.pdfreaderpro.presentation.screens.reader
 
 import com.rejowan.pdfreaderpro.data.local.database.entity.BookmarkEntity
+import com.rejowan.pdfreaderpro.domain.model.Highlight
+import com.rejowan.pdfreaderpro.presentation.components.pdf.model.TextSelection
 import com.rejowan.pdfreaderpro.presentation.screens.reader.components.AttachmentItem
 import com.rejowan.pdfreaderpro.presentation.screens.reader.components.OutlineItem
 
@@ -118,10 +120,37 @@ data class ReaderState(
     val isTopBarMenuVisible: Boolean = false,
 
     // Remove favourite confirmation
-    val isRemoveFavoriteDialogVisible: Boolean = false
+    val isRemoveFavoriteDialogVisible: Boolean = false,
+
+    // Highlights for the current PDF, in reading order
+    val highlights: List<Highlight> = emptyList(),
+
+    // The live text selection, non-null while the user has text selected
+    val pendingSelection: TextSelection? = null,
+
+    /**
+     * Snapshot taken when the user chooses to highlight.
+     *
+     * Held separately from [pendingSelection] because dismissing the selection
+     * action mode clears the underlying selection, which would otherwise pull the
+     * text out from under the colour picker before a colour is chosen.
+     */
+    val capturedSelection: TextSelection? = null,
+
+    // Colour picker, shown for a new highlight or when editing an existing one
+    val isHighlightPickerVisible: Boolean = false,
+
+    // Set when the picker is editing an existing highlight rather than creating one
+    val editingHighlightId: Long? = null,
+
+    val isHighlightsSheetVisible: Boolean = false
 ) {
     val pageLabel: String
         get() = "${currentPage + 1} / $totalPages"
+
+    /** The highlight the colour picker is currently editing, if any. */
+    val editingHighlight: Highlight?
+        get() = editingHighlightId?.let { id -> highlights.firstOrNull { it.id == id } }
 }
 
 /**
@@ -290,4 +319,18 @@ sealed class ReaderAction {
 
     // Save with picker
     data object SaveDocumentWithPicker : ReaderAction()
+
+    // Highlights
+    data class TextSelectionChanged(val selection: TextSelection?) : ReaderAction()
+    /** Opens the colour picker for the current selection. */
+    data object StartHighlight : ReaderAction()
+    /** Creates a highlight from the current selection, or recolours the one being edited. */
+    data class ApplyHighlightColor(val color: Int) : ReaderAction()
+    data class HighlightTapped(val highlightId: Long) : ReaderAction()
+    data class DeleteHighlight(val highlightId: Long) : ReaderAction()
+    data class SetHighlightLabel(val highlightId: Long, val label: String?) : ReaderAction()
+    data object DismissHighlightPicker : ReaderAction()
+    data class GoToHighlight(val highlightId: Long) : ReaderAction()
+    data object ShowHighlightsSheet : ReaderAction()
+    data object HideHighlightsSheet : ReaderAction()
 }

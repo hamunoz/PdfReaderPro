@@ -256,6 +256,22 @@
     <string name="remove_bookmark">Remove Bookmark</string>
     <string name="bookmark_added">Bookmark added</string>
     <string name="bookmark_removed">Bookmark removed</string>
+    <!-- Highlights -->
+    <string name="highlight">Highlight</string>
+    <string name="highlights">Highlights</string>
+    <string name="no_highlights">No highlights</string>
+    <string name="no_highlights_hint">Select any text and tap Highlight to mark it</string>
+    <string name="highlight_color">Highlight colour</string>
+    <string name="highlight_color_yellow">Yellow</string>
+    <string name="highlight_color_green">Green</string>
+    <string name="highlight_color_blue">Blue</string>
+    <string name="highlight_color_pink">Pink</string>
+    <string name="highlight_color_red">Red</string>
+    <string name="delete_highlight">Delete highlight</string>
+    <string name="highlight_page">Page %d</string>
+    <string name="highlight_count">%d highlight</string>
+    <string name="highlights_count">%d highlights</string>
+
     <string name="table_of_contents">Table of Contents</string>
     <string name="no_table_of_contents">No table of contents</string>
     <string name="attachments">Attachments</string>

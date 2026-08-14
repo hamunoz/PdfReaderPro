@@ -5,6 +5,11 @@ import android.net.Uri
 import androidx.lifecycle.SavedStateHandle
 import app.cash.turbine.test
 import com.rejowan.pdfreaderpro.data.local.PasswordStorage
+import com.rejowan.pdfreaderpro.data.local.database.entity.AnnotationEntity
+import com.rejowan.pdfreaderpro.presentation.components.pdf.model.PdfQuad
+import com.rejowan.pdfreaderpro.presentation.components.pdf.model.TextSelection
+import com.rejowan.pdfreaderpro.presentation.screens.reader.HighlightColors
+import com.rejowan.pdfreaderpro.data.local.database.dao.AnnotationDao
 import com.rejowan.pdfreaderpro.data.local.database.dao.BookmarkDao
 import com.rejowan.pdfreaderpro.data.local.database.entity.BookmarkEntity
 import com.rejowan.pdfreaderpro.domain.model.AppPreferences
@@ -47,6 +52,7 @@ class ReaderViewModelTest {
     private lateinit var favoriteRepository: FavoriteRepository
     private lateinit var preferencesRepository: PreferencesRepository
     private lateinit var bookmarkDao: BookmarkDao
+    private lateinit var annotationDao: AnnotationDao
     private lateinit var applicationContext: Context
     private lateinit var savedStateHandle: SavedStateHandle
     private lateinit var passwordStorage: PasswordStorage
@@ -63,6 +69,7 @@ class ReaderViewModelTest {
         favoriteRepository = mockk(relaxed = true)
         preferencesRepository = mockk(relaxed = true)
         bookmarkDao = mockk(relaxed = true)
+        annotationDao = mockk(relaxed = true)
         applicationContext = mockk(relaxed = true)
         passwordStorage = mockk(relaxed = true)
 
@@ -75,6 +82,7 @@ class ReaderViewModelTest {
         // Default mocks
         every { preferencesRepository.preferences } returns flowOf(AppPreferences())
         every { bookmarkDao.getBookmarksForPdf(any()) } returns flowOf(emptyList())
+        every { annotationDao.getHighlightsForPdf(any()) } returns flowOf(emptyList())
         coEvery { favoriteRepository.isFavorite(any()) } returns false
         coEvery { recentRepository.getLastPage(any()) } returns null
     }
@@ -91,6 +99,7 @@ class ReaderViewModelTest {
             favoriteRepository = favoriteRepository,
             preferencesRepository = preferencesRepository,
             bookmarkDao = bookmarkDao,
+            annotationDao = annotationDao,
             applicationContext = applicationContext,
             savedStateHandle = savedStateHandle,
             passwordStorage = passwordStorage
@@ -620,6 +629,239 @@ class ReaderViewModelTest {
         val result = viewModel.getDocumentFileName()
 
         assertEquals("test.pdf", result)
+    }
+    // endregion
+
+    // region Highlights
+
+    private fun selection(
+        page: Int = 5,
+        text: String = "concentration gradient"
+    ) = TextSelection(
+        pageNumber = page,
+        text = text,
+        quads = listOf(PdfQuad(0.1f, 0.2f, 0.3f, 0.02f))
+    )
+
+    @Test
+    fun `text selection change is tracked in state`() = runTest {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onAction(ReaderAction.TextSelectionChanged(selection()))
+        advanceUntilIdle()
+
+        assertEquals("concentration gradient", viewModel.state.value.pendingSelection?.text)
+    }
+
+    @Test
+    fun `start highlight opens the picker and captures the selection`() = runTest {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onAction(ReaderAction.TextSelectionChanged(selection()))
+        viewModel.onAction(ReaderAction.StartHighlight)
+        advanceUntilIdle()
+
+        assertTrue(viewModel.state.value.isHighlightPickerVisible)
+        assertEquals("concentration gradient", viewModel.state.value.capturedSelection?.text)
+    }
+
+    @Test
+    fun `start highlight does nothing without a selection`() = runTest {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onAction(ReaderAction.StartHighlight)
+        advanceUntilIdle()
+
+        assertFalse(viewModel.state.value.isHighlightPickerVisible)
+    }
+
+    /**
+     * Dismissing the selection action mode clears the underlying selection, so the
+     * picker must survive losing it or it would close the instant it opened.
+     */
+    @Test
+    fun `picker survives the selection being cleared`() = runTest {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onAction(ReaderAction.TextSelectionChanged(selection()))
+        viewModel.onAction(ReaderAction.StartHighlight)
+        viewModel.onAction(ReaderAction.TextSelectionChanged(null))
+        advanceUntilIdle()
+
+        assertTrue(viewModel.state.value.isHighlightPickerVisible)
+        assertEquals("concentration gradient", viewModel.state.value.capturedSelection?.text)
+    }
+
+    @Test
+    fun `applying a colour inserts a highlight from the captured selection`() = runTest {
+        coEvery { annotationDao.getMaxSortIndexForPage(any(), any()) } returns null
+        val inserted = slot<AnnotationEntity>()
+        coEvery { annotationDao.insert(capture(inserted)) } returns 1L
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onAction(ReaderAction.TextSelectionChanged(selection()))
+        viewModel.onAction(ReaderAction.StartHighlight)
+        viewModel.onAction(ReaderAction.ApplyHighlightColor(HighlightColors.GREEN))
+        advanceUntilIdle()
+
+        assertEquals("concentration gradient", inserted.captured.selectedText)
+        assertEquals(HighlightColors.GREEN, inserted.captured.color)
+        // The viewer reports 1-based pages, storage is 0-based.
+        assertEquals(4, inserted.captured.pageNumber)
+        assertEquals("highlight", inserted.captured.type)
+    }
+
+    @Test
+    fun `a new highlight is appended after existing ones on the page`() = runTest {
+        coEvery { annotationDao.getMaxSortIndexForPage(any(), any()) } returns 3
+        val inserted = slot<AnnotationEntity>()
+        coEvery { annotationDao.insert(capture(inserted)) } returns 1L
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onAction(ReaderAction.TextSelectionChanged(selection()))
+        viewModel.onAction(ReaderAction.StartHighlight)
+        viewModel.onAction(ReaderAction.ApplyHighlightColor(HighlightColors.YELLOW))
+        advanceUntilIdle()
+
+        assertEquals(4, inserted.captured.sortIndex)
+    }
+
+    @Test
+    fun `the first highlight on a page starts at sort index zero`() = runTest {
+        coEvery { annotationDao.getMaxSortIndexForPage(any(), any()) } returns null
+        val inserted = slot<AnnotationEntity>()
+        coEvery { annotationDao.insert(capture(inserted)) } returns 1L
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onAction(ReaderAction.TextSelectionChanged(selection()))
+        viewModel.onAction(ReaderAction.StartHighlight)
+        viewModel.onAction(ReaderAction.ApplyHighlightColor(HighlightColors.YELLOW))
+        advanceUntilIdle()
+
+        assertEquals(0, inserted.captured.sortIndex)
+    }
+
+    @Test
+    fun `applying a colour closes the picker and drops the captured selection`() = runTest {
+        coEvery { annotationDao.getMaxSortIndexForPage(any(), any()) } returns null
+        coEvery { annotationDao.insert(any()) } returns 1L
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onAction(ReaderAction.TextSelectionChanged(selection()))
+        viewModel.onAction(ReaderAction.StartHighlight)
+        viewModel.onAction(ReaderAction.ApplyHighlightColor(HighlightColors.YELLOW))
+        advanceUntilIdle()
+
+        assertFalse(viewModel.state.value.isHighlightPickerVisible)
+        assertNull(viewModel.state.value.capturedSelection)
+    }
+
+    @Test
+    fun `tapping a highlight opens the picker in editing mode`() = runTest {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onAction(ReaderAction.HighlightTapped(42L))
+        advanceUntilIdle()
+
+        assertTrue(viewModel.state.value.isHighlightPickerVisible)
+        assertEquals(42L, viewModel.state.value.editingHighlightId)
+    }
+
+    @Test
+    fun `applying a colour while editing updates instead of inserting`() = runTest {
+        val existing = AnnotationEntity(
+            id = 42L,
+            pdfPath = testPdfPath,
+            pageNumber = 3,
+            type = "highlight",
+            content = null,
+            color = HighlightColors.YELLOW,
+            selectedText = "existing"
+        )
+        coEvery { annotationDao.getById(42L) } returns existing
+        val updated = slot<AnnotationEntity>()
+        coEvery { annotationDao.update(capture(updated)) } returns Unit
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onAction(ReaderAction.HighlightTapped(42L))
+        viewModel.onAction(ReaderAction.ApplyHighlightColor(HighlightColors.BLUE))
+        advanceUntilIdle()
+
+        assertEquals(HighlightColors.BLUE, updated.captured.color)
+        assertEquals("existing", updated.captured.selectedText)
+        coVerify(exactly = 0) { annotationDao.insert(any()) }
+    }
+
+    @Test
+    fun `deleting a highlight removes it and closes the picker`() = runTest {
+        coEvery { annotationDao.deleteById(any()) } returns Unit
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onAction(ReaderAction.HighlightTapped(42L))
+        viewModel.onAction(ReaderAction.DeleteHighlight(42L))
+        advanceUntilIdle()
+
+        coVerify { annotationDao.deleteById(42L) }
+        assertFalse(viewModel.state.value.isHighlightPickerVisible)
+        assertNull(viewModel.state.value.editingHighlightId)
+    }
+
+    @Test
+    fun `dismissing the picker clears editing and captured state`() = runTest {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onAction(ReaderAction.TextSelectionChanged(selection()))
+        viewModel.onAction(ReaderAction.StartHighlight)
+        viewModel.onAction(ReaderAction.DismissHighlightPicker)
+        advanceUntilIdle()
+
+        assertFalse(viewModel.state.value.isHighlightPickerVisible)
+        assertNull(viewModel.state.value.capturedSelection)
+        assertNull(viewModel.state.value.editingHighlightId)
+    }
+
+    @Test
+    fun `highlights from the database land in state`() = runTest {
+        every { annotationDao.getHighlightsForPdf(any()) } returns flowOf(
+            listOf(
+                AnnotationEntity(
+                    id = 1L,
+                    pdfPath = testPdfPath,
+                    pageNumber = 2,
+                    type = "highlight",
+                    content = null,
+                    color = HighlightColors.PINK,
+                    selectedText = "osmosis",
+                    quads = """[{"x":0.1,"y":0.2,"w":0.3,"h":0.02}]"""
+                )
+            )
+        )
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        val highlights = viewModel.state.value.highlights
+        assertEquals(1, highlights.size)
+        assertEquals("osmosis", highlights[0].text)
+        assertEquals(1, highlights[0].quads.size)
     }
     // endregion
 }

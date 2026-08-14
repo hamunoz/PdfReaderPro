@@ -224,6 +224,25 @@ class PdfViewer @JvmOverloads constructor(
     var currentTextSelection: TextSelection? = null; internal set
 
     /**
+     * Extra items appended to the text selection menu, alongside Copy and the rest.
+     *
+     * Set before a selection is made. Each item's [SelectionMenuItem.onClick] runs on
+     * tap, and the selection menu is then dismissed.
+     */
+    var selectionMenuItems: List<SelectionMenuItem> = emptyList()
+
+    /**
+     * An item added to the text selection menu.
+     *
+     * @param id Menu item id. Must be unique and stable across menu rebuilds.
+     */
+    data class SelectionMenuItem(
+        val id: Int,
+        val title: String,
+        val onClick: () -> Unit
+    )
+
+    /**
      * Defines the list of colors available in the highlight editor's color palette.
      *
      * This property is a list of pairs, where each pair consists of:
@@ -1824,11 +1843,24 @@ class PdfViewer @JvmOverloads constructor(
         val actionModeCallback = callback ?: simpleActionModeCallback
 
         return object : ActionMode.Callback2(), PdfListener {
-            override fun onActionItemClicked(mode: ActionMode?, item: MenuItem?) =
-                actionModeCallback.onActionItemClicked(mode, item)
+            override fun onActionItemClicked(mode: ActionMode?, item: MenuItem?): Boolean {
+                val custom = selectionMenuItems.firstOrNull { it.id == item?.itemId }
+                if (custom != null) {
+                    custom.onClick()
+                    mode?.finish()
+                    return true
+                }
 
-            override fun onPrepareActionMode(mode: ActionMode?, menu: Menu?) =
-                actionModeCallback.onPrepareActionMode(mode, menu)
+                return actionModeCallback.onActionItemClicked(mode, item)
+            }
+
+            override fun onPrepareActionMode(mode: ActionMode?, menu: Menu?): Boolean {
+                val handled = actionModeCallback.onPrepareActionMode(mode, menu)
+                // Also added here, since the framework may rebuild the menu between
+                // create and display.
+                addSelectionMenuItems(menu)
+                return handled
+            }
 
             override fun onCreateActionMode(mode: ActionMode?, menu: Menu?): Boolean {
                 if (editor.run { applyHighlightColorOnTextSelection && textHighlighterOn }) {
@@ -1841,7 +1873,9 @@ class PdfViewer @JvmOverloads constructor(
                     return true
                 }
 
-                return actionModeCallback.onCreateActionMode(mode, menu)
+                val handled = actionModeCallback.onCreateActionMode(mode, menu)
+                addSelectionMenuItems(menu)
+                return handled
             }
 
             override fun onDestroyActionMode(mode: ActionMode?) {
@@ -1866,6 +1900,20 @@ class PdfViewer @JvmOverloads constructor(
 
             override fun onEditorHighlightColorChange(highlightColor: Int) {
                 setTextSelectionColor(highlightColor)
+            }
+        }
+    }
+
+    /**
+     * Adds [selectionMenuItems] to the text selection menu, skipping any already
+     * present so repeated prepare passes cannot duplicate them.
+     */
+    private fun addSelectionMenuItems(menu: Menu?) {
+        menu ?: return
+
+        selectionMenuItems.forEach { item ->
+            if (menu.findItem(item.id) == null) {
+                menu.add(Menu.NONE, item.id, Menu.CATEGORY_SECONDARY, item.title)
             }
         }
     }

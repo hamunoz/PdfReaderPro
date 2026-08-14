@@ -29,7 +29,7 @@ val viewModelModule = module {
     viewModelOf(::SearchViewModel)
     viewModelOf(::SettingsViewModel)
     viewModelOf(::OnboardingViewModel)
-    viewModel { params -> ReaderViewModel(get(), get(), get(), get(), androidContext(), params.get()) }
+    viewModel { params -> ReaderViewModel(get(), get(), get(), get(), get(), androidContext(), params.get()) }
     viewModel { MergeViewModel(get(), androidContext()) }
     viewModel { SplitViewModel(get(), androidContext()) }
     viewModel { CompressViewModel(get(), androidContext()) }

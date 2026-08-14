@@ -50,8 +50,10 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.navigation.NavController
+import com.rejowan.pdfreaderpro.R
 import com.rejowan.pdfreaderpro.presentation.components.pdf.PdfViewer
 import com.rejowan.pdfreaderpro.presentation.components.pdf.print.DefaultPdfPrintAdapter
+import com.rejowan.pdfreaderpro.presentation.screens.reader.components.HighlightColorPicker
 import com.rejowan.pdfreaderpro.presentation.screens.reader.components.DeleteConfirmDialog
 import com.rejowan.pdfreaderpro.presentation.screens.reader.components.EnhancedTableOfContents
 import com.rejowan.pdfreaderpro.presentation.screens.reader.components.ErrorState
@@ -311,6 +313,16 @@ fun ReaderScreen(
                         it.defaultFileName = viewModel.pdfPath.substringAfterLast("/")
                     }
 
+                    // Adds "Highlight" beside Copy in the text selection menu.
+                    selectionMenuItems = listOf(
+                        PdfViewer.SelectionMenuItem(
+                            id = MENU_ID_HIGHLIGHT,
+                            title = ctx.getString(R.string.highlight)
+                        ) {
+                            viewModel.onAction(ReaderAction.StartHighlight)
+                        }
+                    )
+
                     onReady {
                         ui.toolbarEnabled = false
                         ui.isSideBarOpen = false
@@ -423,6 +435,23 @@ fun ReaderScreen(
                     } else {
                         Modifier.align(Alignment.TopEnd)
                     }
+                )
+
+                // Highlight colour picker, sits above the control bar so it does not
+                // cover it while the user is choosing.
+                HighlightColorPicker(
+                    isVisible = state.isHighlightPickerVisible,
+                    selectedColor = state.editingHighlight?.color,
+                    onColorSelected = { color ->
+                        viewModel.onAction(ReaderAction.ApplyHighlightColor(color))
+                    },
+                    onDelete = state.editingHighlightId?.let { id ->
+                        { viewModel.onAction(ReaderAction.DeleteHighlight(id)) }
+                    },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .windowInsetsPadding(WindowInsets.navigationBars)
+                        .padding(bottom = if (state.isToolbarVisible && !state.isFullScreen) 96.dp else 24.dp)
                 )
 
                 // Floating control bar at bottom
@@ -690,3 +719,11 @@ fun ReaderScreen(
         )
     }
 }
+
+/**
+ * Menu item id for "Highlight" in the text selection menu.
+ *
+ * Must be stable, since the menu is rebuilt on every prepare pass and items are
+ * matched back by id.
+ */
+private const val MENU_ID_HIGHLIGHT = 0x48_4C_47_31
