@@ -145,6 +145,9 @@ data class ReaderState(
 
     val isHighlightsSheetVisible: Boolean = false,
 
+    /** Pre-filled search for the highlights panel, set when opening it from search. */
+    val highlightsSheetQuery: String = "",
+
     /**
      * Index into [highlights] of the highlight currently being stepped through,
      * or -1 when none is.
@@ -164,6 +167,21 @@ data class ReaderState(
     /** 1-based position for the navigation strip, e.g. "3 / 12". */
     val highlightPositionLabel: String
         get() = "${currentHighlightIndex + 1} / ${highlights.size}"
+
+    /**
+     * Highlights whose text matches the current search.
+     *
+     * Lets the search bar show how many of the hits the user has already marked.
+     * Matched here rather than against the viewer's own results because PDF.js
+     * reports match counts, not match positions, so there is nothing to intersect
+     * a stored quad against.
+     */
+    val highlightsMatchingSearch: List<Highlight>
+        get() = if (searchQuery.isBlank()) {
+            emptyList()
+        } else {
+            highlights.filter { it.text.contains(searchQuery, ignoreCase = true) }
+        }
 }
 
 /**
@@ -344,7 +362,7 @@ sealed class ReaderAction {
     data class SetHighlightLabel(val highlightId: Long, val label: String?) : ReaderAction()
     data object DismissHighlightPicker : ReaderAction()
     data class GoToHighlight(val highlightId: Long) : ReaderAction()
-    data object ShowHighlightsSheet : ReaderAction()
+    data class ShowHighlightsSheet(val query: String = "") : ReaderAction()
     data object HideHighlightsSheet : ReaderAction()
     data object NextHighlight : ReaderAction()
     data object PreviousHighlight : ReaderAction()

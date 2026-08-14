@@ -84,7 +84,8 @@ fun HighlightsSheet(
     currentPage: Int,
     onHighlightClick: (Highlight) -> Unit,
     onDeleteHighlight: (Highlight) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    initialQuery: String = ""
 ) {
     val configuration = LocalConfiguration.current
     val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
@@ -95,7 +96,8 @@ fun HighlightsSheet(
             currentPage = currentPage,
             onHighlightClick = onHighlightClick,
             onDeleteHighlight = onDeleteHighlight,
-            onDismiss = onDismiss
+            onDismiss = onDismiss,
+            initialQuery = initialQuery
         )
     } else {
         HighlightsBottomSheet(
@@ -103,7 +105,8 @@ fun HighlightsSheet(
             currentPage = currentPage,
             onHighlightClick = onHighlightClick,
             onDeleteHighlight = onDeleteHighlight,
-            onDismiss = onDismiss
+            onDismiss = onDismiss,
+            initialQuery = initialQuery
         )
     }
 }
@@ -115,7 +118,8 @@ private fun HighlightsBottomSheet(
     currentPage: Int,
     onHighlightClick: (Highlight) -> Unit,
     onDeleteHighlight: (Highlight) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    initialQuery: String = ""
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -130,7 +134,8 @@ private fun HighlightsBottomSheet(
             highlights = highlights,
             currentPage = currentPage,
             onHighlightClick = onHighlightClick,
-            onDeleteHighlight = onDeleteHighlight
+            onDeleteHighlight = onDeleteHighlight,
+            initialQuery = initialQuery
         )
     }
 }
@@ -141,7 +146,8 @@ private fun HighlightsSidePanel(
     currentPage: Int,
     onHighlightClick: (Highlight) -> Unit,
     onDeleteHighlight: (Highlight) -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    initialQuery: String = ""
 ) {
     var isVisible by remember { mutableStateOf(false) }
 
@@ -189,6 +195,7 @@ private fun HighlightsSidePanel(
                     currentPage = currentPage,
                     onHighlightClick = onHighlightClick,
                     onDeleteHighlight = onDeleteHighlight,
+                    initialQuery = initialQuery,
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(
@@ -207,9 +214,10 @@ private fun HighlightsContent(
     currentPage: Int,
     onHighlightClick: (Highlight) -> Unit,
     onDeleteHighlight: (Highlight) -> Unit,
+    initialQuery: String = "",
     modifier: Modifier = Modifier
 ) {
-    var query by remember { mutableStateOf("") }
+    var query by remember { mutableStateOf(initialQuery) }
     var colorFilter by remember { mutableStateOf<Int?>(null) }
 
     // Filtering in memory rather than re-querying: the list is already loaded and

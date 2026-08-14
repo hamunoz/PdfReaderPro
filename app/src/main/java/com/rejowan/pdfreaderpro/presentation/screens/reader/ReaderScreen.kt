@@ -406,7 +406,13 @@ fun ReaderScreen(
                             viewModel.onAction(ReaderAction.ClearSearch)
                             viewModel.onAction(ReaderAction.ToggleSearch)
                         },
-                        isDarkMode = isDarkMode
+                        isDarkMode = isDarkMode,
+                        highlightMatchCount = state.highlightsMatchingSearch.size,
+                        onHighlightMatchesClick = {
+                            viewModel.onAction(
+                                ReaderAction.ShowHighlightsSheet(state.searchQuery)
+                            )
+                        }
                     )
                 }
 
@@ -666,7 +672,8 @@ fun ReaderScreen(
             onDeleteHighlight = { highlight ->
                 viewModel.onAction(ReaderAction.DeleteHighlight(highlight.id))
             },
-            onDismiss = { viewModel.onAction(ReaderAction.HideHighlightsSheet) }
+            onDismiss = { viewModel.onAction(ReaderAction.HideHighlightsSheet) },
+            initialQuery = state.highlightsSheetQuery
         )
     }
 
@@ -674,7 +681,7 @@ fun ReaderScreen(
     if (state.isMoreOptionsSheetVisible) {
         MoreOptionsSheet(
             onHighlightsClick = {
-                viewModel.onAction(ReaderAction.ShowHighlightsSheet)
+                viewModel.onAction(ReaderAction.ShowHighlightsSheet())
             },
             onBookmarksClick = {
                 viewModel.onAction(ReaderAction.ShowBookmarksSheet)

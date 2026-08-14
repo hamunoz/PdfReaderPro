@@ -1036,4 +1036,80 @@ class ReaderViewModelTest {
         assertFalse(viewModel.state.value.isHighlightNavVisible)
     }
     // endregion
+
+    // region Search and highlight integration
+
+    @Test
+    fun `no highlight matches when the search is empty`() = runTest {
+        withHighlights(highlightEntity(1, 0))
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.state.value.highlightsMatchingSearch.isEmpty())
+    }
+
+    @Test
+    fun `highlights matching the search are surfaced`() = runTest {
+        every { annotationDao.getHighlightsForPdf(any()) } returns flowOf(
+            listOf(
+                highlightEntity(1, 0).copy(selectedText = "osmotic pressure"),
+                highlightEntity(2, 1).copy(selectedText = "concentration gradient"),
+                highlightEntity(3, 2).copy(selectedText = "cell membrane")
+            )
+        )
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onAction(ReaderAction.Search("pressure"))
+        advanceUntilIdle()
+
+        val matches = viewModel.state.value.highlightsMatchingSearch
+        assertEquals(1, matches.size)
+        assertEquals("osmotic pressure", matches[0].text)
+    }
+
+    @Test
+    fun `highlight search ignores case`() = runTest {
+        every { annotationDao.getHighlightsForPdf(any()) } returns flowOf(
+            listOf(highlightEntity(1, 0).copy(selectedText = "Osmotic Pressure"))
+        )
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onAction(ReaderAction.Search("OSMOTIC"))
+        advanceUntilIdle()
+
+        assertEquals(1, viewModel.state.value.highlightsMatchingSearch.size)
+    }
+
+    @Test
+    fun `opening the panel from search carries the query over`() = runTest {
+        withHighlights(highlightEntity(1, 0))
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onAction(ReaderAction.ShowHighlightsSheet("gradient"))
+        advanceUntilIdle()
+
+        assertTrue(viewModel.state.value.isHighlightsSheetVisible)
+        assertEquals("gradient", viewModel.state.value.highlightsSheetQuery)
+    }
+
+    @Test
+    fun `opening the panel normally leaves the query empty`() = runTest {
+        withHighlights(highlightEntity(1, 0))
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onAction(ReaderAction.ShowHighlightsSheet())
+        advanceUntilIdle()
+
+        assertEquals("", viewModel.state.value.highlightsSheetQuery)
+    }
+    // endregion
 }

@@ -887,7 +887,9 @@ class ReaderViewModel(
 
             is ReaderAction.GoToHighlight -> goToHighlight(action.highlightId)
 
-            is ReaderAction.ShowHighlightsSheet -> _state.update { it.copy(isHighlightsSheetVisible = true) }
+            is ReaderAction.ShowHighlightsSheet -> _state.update {
+                it.copy(isHighlightsSheetVisible = true, highlightsSheetQuery = action.query)
+            }
             is ReaderAction.HideHighlightsSheet -> _state.update { it.copy(isHighlightsSheetVisible = false) }
 
             is ReaderAction.NextHighlight -> stepHighlight(forward = true)
