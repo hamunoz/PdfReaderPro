@@ -1378,4 +1378,171 @@ function setupSelectionReporting() {
         }, SELECTION_DEBOUNCE_MS);
     });
 }
+
+// Stored highlights for the open document, keyed by 1-based page number.
+const storedHighlights = new Map();
+
+const HIGHLIGHT_LAYER_CLASS = "jwi-highlight-layer";
+const HIGHLIGHT_CLASS = "jwi-highlight";
+
+/**
+ * The overlay layer for a page, created on first use.
+ *
+ * Inserted straight after the canvas wrapper so it sits below the text layer in
+ * paint order. Combined with `pointer-events: none` in helper.css, that keeps text
+ * selection working normally over the top of a highlight.
+ */
+function ensureHighlightLayer(pageElement) {
+    let layer = pageElement.querySelector("." + HIGHLIGHT_LAYER_CLASS);
+    if (layer) return layer;
+
+    layer = document.createElement("div");
+    layer.className = HIGHLIGHT_LAYER_CLASS;
+
+    const canvasWrapper = pageElement.querySelector(".canvasWrapper");
+    if (canvasWrapper && canvasWrapper.nextSibling) {
+        pageElement.insertBefore(layer, canvasWrapper.nextSibling);
+    } else {
+        pageElement.appendChild(layer);
+    }
+
+    return layer;
+}
+
+function removeAllChildren(element) {
+    while (element.firstChild) element.removeChild(element.firstChild);
+}
+
+/**
+ * Draws the stored highlights for one page.
+ *
+ * Always clears first. Pages are virtualised and re-render on scroll, so without
+ * that the same highlight stacks up every time the page comes back into view.
+ */
+function renderHighlightsForPage(pageNumber) {
+    const pageView = getHighlightPageView(pageNumber);
+    if (!pageView) return;
+
+    const layer = ensureHighlightLayer(pageView.div);
+    removeAllChildren(layer);
+
+    const items = storedHighlights.get(pageNumber);
+    if (!items || items.length === 0) return;
+
+    const view = pageView.pdfPage.view;
+    const viewport = pageView.viewport;
+
+    for (const item of items) {
+        if (!item.quads) continue;
+
+        for (const quad of item.quads) {
+            const topLeft = fromNormalisedPoint(view, quad.x, quad.y);
+            const bottomRight = fromNormalisedPoint(view, quad.x + quad.w, quad.y + quad.h);
+
+            const a = viewport.convertToViewportPoint(topLeft[0], topLeft[1]);
+            const b = viewport.convertToViewportPoint(bottomRight[0], bottomRight[1]);
+
+            const element = document.createElement("div");
+            element.className = HIGHLIGHT_CLASS;
+            element.dataset.highlightId = item.id;
+            element.style.left = Math.min(a[0], b[0]) + "px";
+            element.style.top = Math.min(a[1], b[1]) + "px";
+            element.style.width = Math.abs(b[0] - a[0]) + "px";
+            element.style.height = Math.abs(b[1] - a[1]) + "px";
+            element.style.backgroundColor = item.color;
+
+            layer.appendChild(element);
+        }
+    }
+}
+
+/** Redraws every page that currently has a highlight layer. */
+function refreshRenderedHighlights() {
+    for (const pageNumber of storedHighlights.keys()) {
+        renderHighlightsForPage(pageNumber);
+    }
+}
+
+/** Empties every layer, including pages that no longer have any highlights. */
+function clearRenderedHighlights() {
+    const layers = document.querySelectorAll("." + HIGHLIGHT_LAYER_CLASS);
+    for (const layer of layers) removeAllChildren(layer);
+}
+
+/**
+ * Replaces the highlight set for the whole document.
+ *
+ * @param json A JSON array of
+ * `{"id": 1, "page": 12, "color": "rgba(...)", "quads": [...]}`.
+ */
+function applyStoredHighlights(json) {
+    let items = [];
+    try {
+        items = JSON.parse(json) || [];
+    } catch (e) {
+        console.error("Error parsing highlights:", e);
+        items = [];
+    }
+
+    // Clear before repopulating, so highlights deleted since the last call do not
+    // linger on pages that have dropped out of the new set entirely.
+    clearRenderedHighlights();
+    storedHighlights.clear();
+
+    for (const item of items) {
+        if (!storedHighlights.has(item.page)) storedHighlights.set(item.page, []);
+        storedHighlights.get(item.page).push(item);
+    }
+
+    refreshRenderedHighlights();
+}
+
+/** Scrolls a highlight into view and pulses it so the user can spot it. */
+function scrollToHighlight(highlightId) {
+    const element = document.querySelector(
+        `.${HIGHLIGHT_CLASS}[data-highlight-id="${highlightId}"]`
+    );
+    if (!element) return false;
+
+    element.scrollIntoView({ block: "center", behavior: "smooth" });
+    element.classList.remove("jwi-highlight-pulse");
+    // Force a reflow so the animation restarts when the same highlight is
+    // selected twice in a row.
+    void element.offsetWidth;
+    element.classList.add("jwi-highlight-pulse");
+
+    return true;
+}
+
+/**
+ * Finds the highlight under a viewport point, or "" when there is none.
+ *
+ * Hit testing by hand rather than with pointer events, because the layer has to
+ * stay `pointer-events: none` for text selection to keep working through it.
+ */
+function highlightIdAtPoint(x, y) {
+    const elements = document.querySelectorAll("." + HIGHLIGHT_CLASS);
+
+    for (const element of elements) {
+        const bounds = element.getBoundingClientRect();
+        if (x >= bounds.left && x <= bounds.right && y >= bounds.top && y <= bounds.bottom) {
+            return element.dataset.highlightId || "";
+        }
+    }
+
+    return "";
+}
+
+function setupHighlightRendering() {
+    const eventBus = PDFViewerApplication.eventBus;
+    if (!eventBus) return;
+
+    // Pages are virtualised, so this fires again every time a page scrolls back in.
+    eventBus.on("pagerendered", (event) => renderHighlightsForPage(event.pageNumber));
+
+    // Zoom and rotation both change the viewport transform, so every quad has to be
+    // reprojected. Deferred a tick so the new viewport is in place before we read it.
+    eventBus.on("scalechanging", () => setTimeout(refreshRenderedHighlights, 0));
+    eventBus.on("rotationchanging", () => setTimeout(refreshRenderedHighlights, 0));
+}
 // #endregion

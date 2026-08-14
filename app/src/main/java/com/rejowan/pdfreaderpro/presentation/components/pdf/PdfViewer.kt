@@ -36,6 +36,7 @@ import com.rejowan.pdfreaderpro.presentation.components.pdf.js.toJsHex
 import com.rejowan.pdfreaderpro.presentation.components.pdf.js.toJsRgba
 import com.rejowan.pdfreaderpro.presentation.components.pdf.js.toJsString
 import com.rejowan.pdfreaderpro.presentation.components.pdf.js.with
+import com.rejowan.pdfreaderpro.presentation.components.pdf.model.RenderedHighlight
 import com.rejowan.pdfreaderpro.presentation.components.pdf.model.SideBarTreeItem
 import com.rejowan.pdfreaderpro.presentation.components.pdf.model.TextSelection
 import kotlinx.serialization.SerializationException
@@ -1737,6 +1738,30 @@ class PdfViewer @JvmOverloads constructor(
      */
     fun removeTextSelection() {
         webView callDirectly "window.getSelection().removeAllRanges"()
+    }
+
+    /**
+     * Replaces the highlights drawn over the document.
+     *
+     * The viewer holds these itself and redraws them as pages scroll in and out, and
+     * whenever the zoom or rotation changes, so this only needs calling when the set
+     * of highlights actually changes.
+     *
+     * Passing an empty list clears them.
+     */
+    fun setHighlights(highlights: List<RenderedHighlight>) {
+        val payload = Json.encodeToString(highlights)
+        webView callDirectly "applyStoredHighlights"(payload.toJsString())
+    }
+
+    /**
+     * Scrolls a highlight into view and pulses it.
+     *
+     * Only works for a highlight on a page the viewer has rendered. Jump to the page
+     * first when coming from the highlights panel.
+     */
+    fun scrollToHighlight(highlightId: Long) {
+        webView callDirectly "scrollToHighlight"(highlightId)
     }
 
     /**

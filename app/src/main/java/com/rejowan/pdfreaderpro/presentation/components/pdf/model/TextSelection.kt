@@ -30,3 +30,20 @@ data class TextSelection(
     val text: String,
     val quads: List<PdfQuad>
 )
+
+/**
+ * A highlight as the viewer needs it in order to draw one.
+ *
+ * Deliberately narrower than the stored highlight: the text, label and note are of
+ * no use to the renderer, so they are not sent across the bridge.
+ *
+ * @param color A CSS colour string. Semi-transparent, since the overlay paints over
+ * the page.
+ */
+@Serializable
+data class RenderedHighlight(
+    val id: Long,
+    @SerialName("page") val pageNumber: Int,
+    val color: String,
+    val quads: List<PdfQuad>
+)

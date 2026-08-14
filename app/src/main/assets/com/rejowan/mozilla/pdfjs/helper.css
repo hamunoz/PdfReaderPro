@@ -61,6 +61,44 @@
     inset-inline-start: 0;
 }
 
+/* Persistent text highlights (#41).
+   The layer sits under the text layer and never takes pointer events, so text
+   selection keeps working over the top of a highlight. Taps are hit-tested by hand
+   in highlightIdAtPoint() instead. */
+.jwi-highlight-layer {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.jwi-highlight {
+    position: absolute;
+    /* Multiply keeps the glyphs readable through the fill, the way a real
+       highlighter pen behaves, rather than washing them out. */
+    mix-blend-mode: multiply;
+    border-radius: 2px;
+}
+
+/* Brief flash when jumping to a highlight from the panel, so the user can see
+   which one was selected on a page that may hold several. */
+.jwi-highlight-pulse {
+    animation: jwi-highlight-pulse 900ms ease-out 1;
+}
+
+@keyframes jwi-highlight-pulse {
+    0%   { filter: brightness(1); }
+    30%  { filter: brightness(0.82); }
+    100% { filter: brightness(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .jwi-highlight-pulse {
+        animation: none;
+    }
+}
+
 #editorUndoBar {
     z-index: -10;
     opacity: 0;
