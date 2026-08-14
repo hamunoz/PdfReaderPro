@@ -1287,6 +1287,25 @@ function fromNormalisedPoint(view, nx, ny) {
     return [view[0] + nx * width, view[3] - ny * height];
 }
 
+/**
+ * Top-left of a page's content box in client coordinates.
+ *
+ * getBoundingClientRect reports the border box, but `.page` carries a 9px
+ * transparent border (--page-border), and the viewport transform is relative to the
+ * content box. The overlay layer is absolutely positioned, so it anchors to the
+ * padding box too. Measuring from the border box instead pushed every highlight
+ * down and right by the border width, which read as an underline sitting below the
+ * words rather than a fill over them.
+ */
+function contentBoxOrigin(element, bounds) {
+    const style = getComputedStyle(element);
+
+    return {
+        x: bounds.left + (parseFloat(style.borderLeftWidth) || 0),
+        y: bounds.top + (parseFloat(style.borderTopWidth) || 0)
+    };
+}
+
 /** True when the centre of `rect` falls inside `bounds`. */
 function rectCentreWithin(rect, bounds) {
     const cx = rect.left + rect.width / 2;
@@ -1325,6 +1344,7 @@ function getSelectionInfo() {
     const view = pageView.pdfPage.view;
     const viewport = pageView.viewport;
     const pageBounds = pageElement.getBoundingClientRect();
+    const pageOrigin = contentBoxOrigin(pageElement, pageBounds);
 
     const quads = [];
     for (const rect of range.getClientRects()) {
@@ -1336,12 +1356,12 @@ function getSelectionInfo() {
         if (!rectCentreWithin(rect, pageBounds)) continue;
 
         const topLeft = viewport.convertToPdfPoint(
-            rect.left - pageBounds.left,
-            rect.top - pageBounds.top
+            rect.left - pageOrigin.x,
+            rect.top - pageOrigin.y
         );
         const bottomRight = viewport.convertToPdfPoint(
-            rect.right - pageBounds.left,
-            rect.bottom - pageBounds.top
+            rect.right - pageOrigin.x,
+            rect.bottom - pageOrigin.y
         );
 
         const a = toNormalisedPoint(view, topLeft[0], topLeft[1]);

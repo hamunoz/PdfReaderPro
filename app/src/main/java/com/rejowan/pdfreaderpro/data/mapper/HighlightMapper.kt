@@ -3,6 +3,8 @@ package com.rejowan.pdfreaderpro.data.mapper
 import com.rejowan.pdfreaderpro.data.local.database.entity.AnnotationEntity
 import com.rejowan.pdfreaderpro.domain.model.Highlight
 import com.rejowan.pdfreaderpro.domain.model.HighlightQuad
+import com.rejowan.pdfreaderpro.presentation.components.pdf.model.PdfQuad
+import com.rejowan.pdfreaderpro.presentation.components.pdf.model.RenderedHighlight
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 
@@ -62,6 +64,30 @@ fun Highlight.toEntity(): AnnotationEntity = AnnotationEntity(
     createdAt = createdAt,
     updatedAt = updatedAt
 )
+
+/**
+ * Converts a stored highlight into the form the viewer draws from.
+ *
+ * The page number is the boundary that matters here: highlights are stored 0-based
+ * but the viewer indexes pages 1-based, and getting it wrong draws every highlight
+ * one page early, which nothing in the data layer would reveal.
+ *
+ * @param alpha Opacity for the fill, since the overlay paints over the page.
+ */
+fun Highlight.toRendered(alpha: Float): RenderedHighlight = RenderedHighlight(
+    id = id,
+    pageNumber = pageNumber + 1,
+    color = color.toCssRgba(alpha),
+    quads = quads.map { PdfQuad(it.x, it.y, it.w, it.h) }
+)
+
+/** CSS colour string for an ARGB int, with the alpha replaced. */
+fun Int.toCssRgba(alpha: Float): String {
+    val red = (this shr 16) and 0xFF
+    val green = (this shr 8) and 0xFF
+    val blue = this and 0xFF
+    return "rgba($red, $green, $blue, $alpha)"
+}
 
 /**
  * Opaque variant of a highlight colour, for swatches and the panel's colour bar.

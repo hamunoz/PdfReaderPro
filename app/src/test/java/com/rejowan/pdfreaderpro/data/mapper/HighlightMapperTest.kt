@@ -172,4 +172,55 @@ class HighlightMapperTest {
         selectedText = selectedText,
         quads = quads
     )
+
+    // region toRendered
+
+    /**
+     * Highlights are stored 0-based but the viewer indexes pages 1-based. Getting
+     * this wrong draws every highlight one page early, which nothing in the data
+     * layer reveals and only shows up on a device.
+     */
+    @Test
+    fun `toRendered converts the page number to 1-based`() {
+        val result = highlight().copy(pageNumber = 282).toRendered(0.4f)
+        assertEquals(283, result.pageNumber)
+    }
+
+    @Test
+    fun `toRendered maps the first page to page 1`() {
+        assertEquals(1, highlight().copy(pageNumber = 0).toRendered(0.4f).pageNumber)
+    }
+
+    @Test
+    fun `toRendered builds a css rgba colour with the given alpha`() {
+        val result = highlight().copy(color = 0xFF53FFBC.toInt()).toRendered(0.4f)
+        assertEquals("rgba(83, 255, 188, 0.4)", result.color)
+    }
+
+    @Test
+    fun `toRendered drops the stored alpha in favour of the fill alpha`() {
+        // Stored fully opaque, but the overlay paints over the page.
+        val result = highlight().copy(color = 0xFFFFFF98.toInt()).toRendered(0.25f)
+        assertEquals("rgba(255, 255, 152, 0.25)", result.color)
+    }
+
+    @Test
+    fun `toRendered carries the id across`() {
+        assertEquals(7L, highlight().copy(id = 7L).toRendered(0.4f).id)
+    }
+
+    @Test
+    fun `toRendered carries every quad across unchanged`() {
+        val quads = listOf(
+            HighlightQuad(0.60f, 0.20f, 0.30f, 0.02f),
+            HighlightQuad(0.10f, 0.23f, 0.25f, 0.02f)
+        )
+
+        val result = highlight().copy(quads = quads).toRendered(0.4f)
+
+        assertEquals(2, result.quads.size)
+        assertEquals(0.60f, result.quads[0].x)
+        assertEquals(0.23f, result.quads[1].y)
+    }
+    // endregion
 }

@@ -12,6 +12,7 @@ import com.rejowan.pdfreaderpro.data.local.database.entity.BookmarkEntity
 import com.rejowan.pdfreaderpro.data.local.database.dao.FilePreferenceDao
 import com.rejowan.pdfreaderpro.data.local.database.entity.FilePreferenceEntity
 import com.rejowan.pdfreaderpro.data.mapper.toEntity
+import com.rejowan.pdfreaderpro.data.mapper.toRendered
 import com.rejowan.pdfreaderpro.data.mapper.toHighlight
 import com.rejowan.pdfreaderpro.domain.model.Highlight
 import com.rejowan.pdfreaderpro.domain.model.HighlightQuad
@@ -173,16 +174,7 @@ class ReaderViewModel(
      */
     private fun renderHighlights(highlights: List<Highlight>) {
         val viewer = pdfViewer ?: return
-        viewer.setHighlights(
-            highlights.map { highlight ->
-                RenderedHighlight(
-                    id = highlight.id,
-                    pageNumber = highlight.pageNumber,
-                    color = highlight.color.toCssRgba(HIGHLIGHT_FILL_ALPHA),
-                    quads = highlight.quads.map { PdfQuad(it.x, it.y, it.w, it.h) }
-                )
-            }
-        )
+        viewer.setHighlights(highlights.map { it.toRendered(HIGHLIGHT_FILL_ALPHA) })
     }
 
     /**
@@ -289,12 +281,6 @@ class ReaderViewModel(
         }
     }
 
-    private fun Int.toCssRgba(alpha: Float): String {
-        val red = (this shr 16) and 0xFF
-        val green = (this shr 8) and 0xFF
-        val blue = this and 0xFF
-        return "rgba($red, $green, $blue, $alpha)"
-    }
 
     // Mapping functions from domain models to reader state models
     private fun mapDomainScrollMode(mode: DomainScrollMode): ScrollMode {
@@ -372,6 +358,12 @@ class ReaderViewModel(
                         passwordSubmitted = false
                     )
                 }
+
+                // Push these again now the document exists. Both the viewer attaching
+                // and the database emitting happen before the document has loaded, so
+                // anything sent earlier landed on an empty viewer and was lost.
+                renderHighlights(_state.value.highlights)
+                applyHorizontalScrollLock(_state.value.lockHorizontalScroll)
 
                 // Determine which page to start on
                 val lastPage = storedLastPage // Capture for smart cast
