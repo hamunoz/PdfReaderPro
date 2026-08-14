@@ -273,6 +273,16 @@
     <string name="highlights_count">%d highlights</string>
     <string name="view_manage_highlights">View and manage highlights</string>
     <string name="search_highlights">Search highlights</string>
+    <string name="save_with_highlights">Save a copy with highlights</string>
+    <string name="save_with_highlights_desc">Write highlights into a new PDF file</string>
+    <string name="bake_highlights_title">Save a copy with highlights</string>
+    <string name="bake_highlights_body">This writes your %d highlights into a new PDF file, so they show up in other PDF readers too. Your highlights in this app are kept either way.</string>
+    <string name="bake_highlights_caveat">Once a PDF contains highlight, text or ink annotations, some editing features stop working on it. You will choose where to save the copy.</string>
+    <string name="bake_highlights_confirm_check">I understand this creates a separate copy</string>
+    <string name="bake_highlights_action">Save copy</string>
+    <string name="bake_highlights_done">Saved %d highlights into the copy</string>
+    <string name="bake_highlights_failed">Could not save the copy: %s</string>
+    <string name="bake_highlights_none">There are no highlights to save</string>
     <string name="next_highlight">Next highlight</string>
     <string name="previous_highlight">Previous highlight</string>
     <string name="close_highlight_nav">Stop stepping through highlights</string>

@@ -40,6 +40,10 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import com.rejowan.pdfreaderpro.util.HighlightBaker
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.IOException
 import java.io.File
 
 class ReaderViewModel(
@@ -899,6 +903,29 @@ class ReaderViewModel(
                 _state.update { it.copy(isHighlightNavVisible = false, currentHighlightIndex = -1) }
             }
 
+            is ReaderAction.ShowBakeHighlightsDialog -> {
+                if (_state.value.highlights.isEmpty()) {
+                    viewModelScope.launch {
+                        _events.send(
+                            ReaderEvent.ShowMessage(
+                                applicationContext.getString(R.string.bake_highlights_none)
+                            )
+                        )
+                    }
+                } else {
+                    _state.update { it.copy(isBakeHighlightsDialogVisible = true) }
+                }
+            }
+
+            is ReaderAction.HideBakeHighlightsDialog -> {
+                _state.update { it.copy(isBakeHighlightsDialogVisible = false) }
+            }
+
+            is ReaderAction.ConfirmBakeHighlights -> {
+                _state.update { it.copy(isBakeHighlightsDialogVisible = false) }
+                viewModelScope.launch { _events.send(ReaderEvent.BakeHighlightsPicker) }
+            }
+
             // Page rotation
             is ReaderAction.RotateClockwise -> {
                 pdfViewer?.rotateClockWise()
@@ -1262,8 +1289,56 @@ class ReaderViewModel(
         }
     }
 
+    /**
+     * Writes the stored highlights into a copy of the PDF at [uri].
+     *
+     * Runs off the main thread: this reads and rewrites the whole document, which is
+     * far too slow to sit on the UI thread for a large file.
+     *
+     * The Room records are deliberately kept. They remain the source of truth in the
+     * app, and the copy is an export rather than a migration.
+     */
+    fun bakeHighlightsToUri(uri: android.net.Uri) {
+        val highlights = _state.value.highlights
+        if (highlights.isEmpty()) return
+
+        viewModelScope.launch {
+            _state.update { it.copy(isBakingHighlights = true) }
+            try {
+                val written = withContext(Dispatchers.IO) {
+                    applicationContext.contentResolver.openOutputStream(uri)?.use { output ->
+                        HighlightBaker.bake(File(pdfPath), output, highlights)
+                    } ?: throw IOException("Could not open the destination file")
+                }
+                _events.send(
+                    ReaderEvent.ShowMessage(
+                        applicationContext.getString(R.string.bake_highlights_done, written)
+                    )
+                )
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to bake highlights into a copy")
+                _events.send(
+                    ReaderEvent.Error(
+                        applicationContext.getString(
+                            R.string.bake_highlights_failed,
+                            e.message ?: ""
+                        )
+                    )
+                )
+            } finally {
+                _state.update { it.copy(isBakingHighlights = false) }
+            }
+        }
+    }
+
     fun getDocumentFileName(): String {
         return File(pdfPath).name
+    }
+
+    /** Suggested name for the highlighted copy, so it is not mistaken for the original. */
+    fun getHighlightedFileName(): String {
+        val file = File(pdfPath)
+        return "${file.nameWithoutExtension}-highlighted.pdf"
     }
 
     private companion object {

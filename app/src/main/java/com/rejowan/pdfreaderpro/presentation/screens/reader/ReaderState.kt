@@ -155,7 +155,12 @@ data class ReaderState(
     val currentHighlightIndex: Int = -1,
 
     /** The prev/next strip, shown after jumping to a highlight. */
-    val isHighlightNavVisible: Boolean = false
+    val isHighlightNavVisible: Boolean = false,
+
+    /** Confirmation for writing highlights into a copy of the PDF. */
+    val isBakeHighlightsDialogVisible: Boolean = false,
+
+    val isBakingHighlights: Boolean = false
 ) {
     val pageLabel: String
         get() = "${currentPage + 1} / $totalPages"
@@ -221,6 +226,7 @@ sealed class ReaderEvent {
     data object DocumentDeleted : ReaderEvent()
     data object ShareDocument : ReaderEvent()
     data object SaveDocumentPicker : ReaderEvent()
+    data object BakeHighlightsPicker : ReaderEvent()
     data object FavoriteAdded : ReaderEvent()
     data class Error(val message: String) : ReaderEvent()
 }
@@ -367,4 +373,7 @@ sealed class ReaderAction {
     data object NextHighlight : ReaderAction()
     data object PreviousHighlight : ReaderAction()
     data object HideHighlightNav : ReaderAction()
+    data object ShowBakeHighlightsDialog : ReaderAction()
+    data object HideBakeHighlightsDialog : ReaderAction()
+    data object ConfirmBakeHighlights : ReaderAction()
 }

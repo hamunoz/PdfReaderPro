@@ -53,6 +53,7 @@ import androidx.navigation.NavController
 import com.rejowan.pdfreaderpro.R
 import com.rejowan.pdfreaderpro.presentation.components.pdf.PdfViewer
 import com.rejowan.pdfreaderpro.presentation.components.pdf.print.DefaultPdfPrintAdapter
+import com.rejowan.pdfreaderpro.presentation.screens.reader.components.BakeHighlightsDialog
 import com.rejowan.pdfreaderpro.presentation.screens.reader.components.HighlightColorPicker
 import com.rejowan.pdfreaderpro.presentation.screens.reader.components.HighlightNavBar
 import com.rejowan.pdfreaderpro.presentation.screens.reader.components.HighlightsSheet
@@ -96,6 +97,14 @@ fun ReaderScreen(
         contract = ActivityResultContracts.CreateDocument("application/pdf")
     ) { uri ->
         uri?.let { viewModel.saveToUri(it) }
+    }
+
+    // Separate launcher from the plain save, so the suggested filename can make it
+    // obvious which copy carries the highlights.
+    val bakeHighlightsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/pdf")
+    ) { uri ->
+        uri?.let { viewModel.bakeHighlightsToUri(it) }
     }
 
     val state by viewModel.state.collectAsState()
@@ -263,6 +272,9 @@ fun ReaderScreen(
                 }
                 is ReaderEvent.SaveDocumentPicker -> {
                     saveDocumentLauncher.launch(viewModel.getDocumentFileName())
+                }
+                is ReaderEvent.BakeHighlightsPicker -> {
+                    bakeHighlightsLauncher.launch(viewModel.getHighlightedFileName())
                 }
                 is ReaderEvent.FavoriteAdded -> {
                     snackbarHostState.showSnackbar("Added to favourites")
@@ -683,6 +695,9 @@ fun ReaderScreen(
             onHighlightsClick = {
                 viewModel.onAction(ReaderAction.ShowHighlightsSheet())
             },
+            onSaveWithHighlightsClick = {
+                viewModel.onAction(ReaderAction.ShowBakeHighlightsDialog)
+            },
             onBookmarksClick = {
                 viewModel.onAction(ReaderAction.ShowBookmarksSheet)
             },
@@ -751,6 +766,15 @@ fun ReaderScreen(
         onDeleteClick = { viewModel.onAction(ReaderAction.ShowDeleteDialog) },
         onDismiss = { viewModel.onAction(ReaderAction.HideTopBarMenu) }
     )
+
+    // Confirmation for writing highlights into a copy of the PDF
+    if (state.isBakeHighlightsDialogVisible) {
+        BakeHighlightsDialog(
+            highlightCount = state.highlights.size,
+            onConfirm = { viewModel.onAction(ReaderAction.ConfirmBakeHighlights) },
+            onDismiss = { viewModel.onAction(ReaderAction.HideBakeHighlightsDialog) }
+        )
+    }
 
     // Remove favourite confirmation sheet
     if (state.isRemoveFavoriteDialogVisible) {
