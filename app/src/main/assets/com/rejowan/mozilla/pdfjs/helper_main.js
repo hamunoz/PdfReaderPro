@@ -213,6 +213,8 @@ function setupHelper() {
     // Pinning it to SidebarView.NONE keeps both paths from overriding it. (#73)
     PDFViewerApplicationOptions.set("sidebarViewOnLoad", 0);
 
+    setupSelectionReporting();
+
     // Center the active match in the viewport instead of pinning it ~50px
     // below the top (PDF.js's MATCH_SCROLL_OFFSET_TOP). The original scroll
     // runs first to keep PDF.js's internal state consistent, then we

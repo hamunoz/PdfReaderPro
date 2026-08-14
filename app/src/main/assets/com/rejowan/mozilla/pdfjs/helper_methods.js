@@ -1236,3 +1236,146 @@ function performTreeItemClick(itemId) {
     return false;
 }
 // #endregion
+
+// #region text highlights (#41)
+
+// How long to wait after the last selectionchange before reporting. The event
+// fires continuously while a selection handle is being dragged.
+const SELECTION_DEBOUNCE_MS = 120;
+
+let selectionNotifyTimer = null;
+
+/**
+ * Resolves a page's view, viewport and unrotated page box.
+ *
+ * Returns null until the page has actually been rendered, since pages are
+ * virtualised and viewport is only populated once a page has been laid out.
+ */
+function getHighlightPageView(pageNumber) {
+    const viewer = PDFViewerApplication.pdfViewer;
+    if (!viewer) return null;
+
+    const pageView = viewer.getPageView(pageNumber - 1);
+    if (!pageView || !pageView.viewport || !pageView.pdfPage || !pageView.div) return null;
+
+    return pageView;
+}
+
+/**
+ * Converts a point in PDF user space to normalised 0..1 coordinates against the
+ * unrotated page box, with a top-left origin.
+ *
+ * Going via PDF user space rather than screen pixels is what makes a stored
+ * highlight independent of zoom and rotation. `view` is [x0, y0, x1, y1].
+ */
+function toNormalisedPoint(view, x, y) {
+    const width = view[2] - view[0];
+    const height = view[3] - view[1];
+
+    return {
+        x: width === 0 ? 0 : (x - view[0]) / width,
+        // PDF user space has a bottom-left origin, flip it so rendering is top-left.
+        y: height === 0 ? 0 : (view[3] - y) / height
+    };
+}
+
+/** Inverse of [toNormalisedPoint]. Returns a point in PDF user space. */
+function fromNormalisedPoint(view, nx, ny) {
+    const width = view[2] - view[0];
+    const height = view[3] - view[1];
+
+    return [view[0] + nx * width, view[3] - ny * height];
+}
+
+/** True when the centre of `rect` falls inside `bounds`. */
+function rectCentreWithin(rect, bounds) {
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+
+    return cx >= bounds.left && cx <= bounds.right && cy >= bounds.top && cy <= bounds.bottom;
+}
+
+/**
+ * Describes the current text selection as JSON, or "" when there is nothing
+ * usable selected.
+ *
+ * Shape: {"page": 12, "text": "...", "quads": [{"x":..,"y":..,"w":..,"h":..}]}
+ *
+ * One quad per line, because a selection spanning several lines produces one
+ * client rect per line and a single bounding box would cover the gaps.
+ */
+function getSelectionInfo() {
+    const selection = document.getSelection();
+    if (!selection || selection.isCollapsed || selection.rangeCount === 0) return "";
+
+    const text = selection.toString();
+    if (!text.trim()) return "";
+
+    const range = selection.getRangeAt(0);
+    let node = range.commonAncestorContainer;
+    if (node && node.nodeType === Node.TEXT_NODE) node = node.parentElement;
+
+    const pageElement = node && node.closest ? node.closest(".page") : null;
+    if (!pageElement || !pageElement.dataset.pageNumber) return "";
+
+    const pageNumber = parseInt(pageElement.dataset.pageNumber, 10);
+    const pageView = getHighlightPageView(pageNumber);
+    if (!pageView) return "";
+
+    const view = pageView.pdfPage.view;
+    const viewport = pageView.viewport;
+    const pageBounds = pageElement.getBoundingClientRect();
+
+    const quads = [];
+    for (const rect of range.getClientRects()) {
+        if (rect.width <= 0 || rect.height <= 0) continue;
+
+        // A selection can run across a page boundary. Anything outside this page is
+        // dropped rather than converted with the wrong page's viewport, which would
+        // place it somewhere arbitrary.
+        if (!rectCentreWithin(rect, pageBounds)) continue;
+
+        const topLeft = viewport.convertToPdfPoint(
+            rect.left - pageBounds.left,
+            rect.top - pageBounds.top
+        );
+        const bottomRight = viewport.convertToPdfPoint(
+            rect.right - pageBounds.left,
+            rect.bottom - pageBounds.top
+        );
+
+        const a = toNormalisedPoint(view, topLeft[0], topLeft[1]);
+        const b = toNormalisedPoint(view, bottomRight[0], bottomRight[1]);
+
+        const width = Math.abs(b.x - a.x);
+        const height = Math.abs(b.y - a.y);
+        if (width <= 0 || height <= 0) continue;
+
+        quads.push({
+            x: Math.min(a.x, b.x),
+            y: Math.min(a.y, b.y),
+            w: width,
+            h: height
+        });
+    }
+
+    if (quads.length === 0) return "";
+
+    return JSON.stringify({ page: pageNumber, text: text, quads: quads });
+}
+
+/** Clears the current selection without disturbing anything else. */
+function clearSelectionInfo() {
+    const selection = document.getSelection();
+    if (selection) selection.removeAllRanges();
+}
+
+function setupSelectionReporting() {
+    document.addEventListener("selectionchange", () => {
+        clearTimeout(selectionNotifyTimer);
+        selectionNotifyTimer = setTimeout(() => {
+            JWI.onTextSelected(getSelectionInfo());
+        }, SELECTION_DEBOUNCE_MS);
+    });
+}
+// #endregion

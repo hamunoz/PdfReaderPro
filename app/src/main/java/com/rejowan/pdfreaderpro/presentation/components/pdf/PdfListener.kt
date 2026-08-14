@@ -8,6 +8,7 @@ import androidx.annotation.ColorInt
 import androidx.annotation.FloatRange
 import androidx.annotation.IntRange
 import com.rejowan.pdfreaderpro.presentation.components.pdf.model.SideBarTreeItem
+import com.rejowan.pdfreaderpro.presentation.components.pdf.model.TextSelection
 
 /**
  * Interface for listening to events from the PDF viewer.
@@ -359,5 +360,20 @@ interface PdfListener {
      * Called when auto-scroll reaches the end of the document.
      */
     fun onAutoScrollEnd() {}
+
+    /**
+     * Called when the text selection changes.
+     *
+     * @param selection The current selection, or `null` when nothing usable is
+     * selected. Debounced by the viewer, so this does not fire for every frame of a
+     * selection handle drag.
+     */
+    fun onTextSelectionChange(selection: TextSelection?) {}
+
+    /**
+     * Called when the user taps a rendered highlight.
+     * @param highlightId The id of the tapped highlight.
+     */
+    fun onHighlightTapped(highlightId: Long) {}
 
 }

@@ -6,6 +6,7 @@ import android.webkit.RenderProcessGoneDetail
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient.FileChooserParams
 import com.rejowan.pdfreaderpro.presentation.components.pdf.model.SideBarTreeItem
+import com.rejowan.pdfreaderpro.presentation.components.pdf.model.TextSelection
 import com.rejowan.pdfreaderpro.presentation.components.pdf.setting.PdfSettingsManager
 import com.rejowan.pdfreaderpro.presentation.components.pdf.setting.SharedPreferencePdfSettingsSaver
 
@@ -144,6 +145,8 @@ fun PdfViewer.addListener(
     onLoadOutline: ((outline: List<SideBarTreeItem>) -> Unit)? = null,
     onLoadAttachments: ((attachments: List<SideBarTreeItem>) -> Unit)? = null,
     onAutoScrollEnd: (() -> Unit)? = null,
+    onTextSelectionChange: ((selection: TextSelection?) -> Unit)? = null,
+    onHighlightTapped: ((highlightId: Long) -> Unit)? = null,
 ) {
     addListener(object : PdfListener {
         override fun onPageLoadStart() {
@@ -369,6 +372,14 @@ fun PdfViewer.addListener(
 
         override fun onAutoScrollEnd() {
             onAutoScrollEnd?.invoke()
+        }
+
+        override fun onTextSelectionChange(selection: TextSelection?) {
+            onTextSelectionChange?.invoke(selection)
+        }
+
+        override fun onHighlightTapped(highlightId: Long) {
+            onHighlightTapped?.invoke(highlightId)
         }
     })
 }

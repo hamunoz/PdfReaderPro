@@ -37,6 +37,9 @@ import com.rejowan.pdfreaderpro.presentation.components.pdf.js.toJsRgba
 import com.rejowan.pdfreaderpro.presentation.components.pdf.js.toJsString
 import com.rejowan.pdfreaderpro.presentation.components.pdf.js.with
 import com.rejowan.pdfreaderpro.presentation.components.pdf.model.SideBarTreeItem
+import com.rejowan.pdfreaderpro.presentation.components.pdf.model.TextSelection
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.Json
 import com.rejowan.pdfreaderpro.presentation.components.pdf.print.PdfPrintAdapter
 import com.rejowan.pdfreaderpro.presentation.components.pdf.resource.AssetResourceLoader
 import com.rejowan.pdfreaderpro.presentation.components.pdf.resource.ContentResourceLoader
@@ -208,6 +211,16 @@ class PdfViewer @JvmOverloads constructor(
      * @see PdfListener.onLoadAttachments
      */
     var attachments: List<SideBarTreeItem>? = null; internal set
+
+    /**
+     * The current text selection, or `null` when nothing usable is selected.
+     *
+     * Updated as the selection changes, debounced by the viewer so it does not
+     * churn during a selection handle drag.
+     *
+     * @see PdfListener.onTextSelectionChange
+     */
+    var currentTextSelection: TextSelection? = null; internal set
 
     /**
      * Defines the list of colors available in the highlight editor's color palette.
@@ -1724,6 +1737,41 @@ class PdfViewer @JvmOverloads constructor(
      */
     fun removeTextSelection() {
         webView callDirectly "window.getSelection().removeAllRanges"()
+    }
+
+    /**
+     * Reads the current text selection directly, rather than waiting for the next
+     * [PdfListener.onTextSelectionChange].
+     *
+     * Useful at the moment the user acts on a selection, where the debounced
+     * callback may not have landed yet.
+     *
+     * @param callback Receives the selection, or `null` when nothing is selected.
+     */
+    fun getTextSelection(callback: (TextSelection?) -> Unit) {
+        webView callDirectly "getSelectionInfo"(callback = { raw ->
+            callback(parseSelectionResult(raw))
+        })
+    }
+
+    /**
+     * `evaluateJavascript` hands back a JSON-encoded return value, so the JS string
+     * arrives wrapped in quotes and escaped. Unwrap it before decoding.
+     *
+     * Returns `null` for anything malformed, since the payload is built in JS and a
+     * bad one should not take down the reader.
+     */
+    private fun parseSelectionResult(raw: String?): TextSelection? {
+        if (raw.isNullOrBlank() || raw == "null" || raw == "\"\"") return null
+        return try {
+            val unwrapped = Json.decodeFromString<String>(raw)
+            if (unwrapped.isBlank()) return null
+            Json.decodeFromString<TextSelection>(unwrapped).takeIf { it.quads.isNotEmpty() }
+        } catch (e: SerializationException) {
+            null
+        } catch (e: IllegalArgumentException) {
+            null
+        }
     }
 
     override fun setLayerType(layerType: Int, paint: Paint?) {
