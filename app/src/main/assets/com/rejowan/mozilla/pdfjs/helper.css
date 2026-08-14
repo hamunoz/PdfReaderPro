@@ -50,6 +50,17 @@
     display: none;
 }
 
+/* hideAllControls() hides #sidebarContainer outright, so nothing should ever be
+   offset to make room for it. If the sidebarOpen class does get set, PDF.js shifts
+   #viewerContainer by --sidebar-width (200px) and leaves a blank strip where the
+   invisible sidebar would be. Its own max-width:840px rule already zeroes this out,
+   which is why the strip only shows up on wide viewports such as landscape on large
+   phones. Zero it out at every width instead. (#73) */
+#outerContainer.sidebarOpen #viewerContainer:not(.pdfPresentationMode),
+#outerContainer.sidebarOpen #loadingBar {
+    inset-inline-start: 0;
+}
+
 #editorUndoBar {
     z-index: -10;
     opacity: 0;

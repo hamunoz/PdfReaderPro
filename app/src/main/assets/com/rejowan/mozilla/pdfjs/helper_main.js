@@ -203,6 +203,16 @@ function setupHelper() {
     PDFViewerApplication.findBar.highlightAll.click();
     PDFViewerApplication.pdfSidebar.close();
 
+    // Closing the sidebar here is not enough on its own: this runs before any
+    // document is loaded, and PDF.js re-derives the sidebar state per document in
+    // setInitialView. sidebarViewOnLoad defaults to -1 (UNKNOWN), so a catalog
+    // /PageMode of UseOutlines/UseThumbs/UseAttachments/UseOC - or a previously
+    // stored sidebarView - reopens it. The sidebar element itself stays hidden by
+    // hideAllControls(), but #outerContainer keeps the sidebarOpen class, which
+    // offsets #viewerContainer by --sidebar-width (200px) and leaves a blank strip.
+    // Pinning it to SidebarView.NONE keeps both paths from overriding it. (#73)
+    PDFViewerApplicationOptions.set("sidebarViewOnLoad", 0);
+
     // Center the active match in the viewport instead of pinning it ~50px
     // below the top (PDF.js's MATCH_SCROLL_OFFSET_TOP). The original scroll
     // runs first to keep PDF.js's internal state consistent, then we
