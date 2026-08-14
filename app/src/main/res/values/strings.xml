@@ -289,6 +289,10 @@
     <string name="no_matching_highlights">No matches</string>
     <string name="no_matching_highlights_hint">Try a different search or colour</string>
 
+    <string name="lock_horizontal_scroll">Lock horizontal scroll</string>
+    <string name="lock_horizontal_scroll_desc">Hold the page where it is when zoomed in</string>
+    <string name="lock_horizontal_scroll_unavailable">Only available with vertical scrolling</string>
+
     <string name="table_of_contents">Table of Contents</string>
     <string name="no_table_of_contents">No table of contents</string>
     <string name="attachments">Attachments</string>

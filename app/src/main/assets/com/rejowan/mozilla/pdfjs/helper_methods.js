@@ -1533,6 +1533,91 @@ function highlightIdAtPoint(x, y) {
     return "";
 }
 
+// #endregion
+
+// #region horizontal scroll lock (#74)
+
+// Freezes horizontal panning at whatever position the page is on when the lock is
+// switched on, rather than at the centre. Someone who has panned to a particular
+// column wants to stay there, and re-centring would move them off it.
+const horizontalScrollLock = {
+    enabled: false,
+    position: 0
+};
+
+function isHorizontalScrollMode() {
+    const viewer = PDFViewerApplication.pdfViewer;
+    return !!viewer && viewer.scrollMode === ScrollMode.HORIZONTAL;
+}
+
+/**
+ * Turns the lock on at the current horizontal position, or off.
+ *
+ * Refuses to engage in horizontal scroll mode: that is the axis the document
+ * scrolls along, and locking it would strand the reader on one page.
+ *
+ * @return true if the lock is now on.
+ */
+function setHorizontalScrollLock(enabled) {
+    const container = document.getElementById("viewerContainer");
+    if (!container) return false;
+
+    if (!enabled || isHorizontalScrollMode()) {
+        horizontalScrollLock.enabled = false;
+        return false;
+    }
+
+    horizontalScrollLock.enabled = true;
+    horizontalScrollLock.position = container.scrollLeft;
+    return true;
+}
+
+function isHorizontalScrollLocked() {
+    return horizontalScrollLock.enabled;
+}
+
+/** Keeps the frozen position reachable after a zoom changes the scrollable width. */
+function clampHorizontalScrollLock() {
+    if (!horizontalScrollLock.enabled) return;
+
+    const container = document.getElementById("viewerContainer");
+    if (!container) return;
+
+    const maxScroll = Math.max(0, container.scrollWidth - container.clientWidth);
+    horizontalScrollLock.position = Math.min(horizontalScrollLock.position, maxScroll);
+}
+
+function setupHorizontalScrollLock() {
+    const container = document.getElementById("viewerContainer");
+    if (!container) return;
+
+    // Restoring on scroll rather than setting overflow-x: hidden, because hiding
+    // the overflow clamps scrollLeft to 0 and would throw the reader back to the
+    // left edge instead of holding the position they picked.
+    container.addEventListener("scroll", () => {
+        if (!horizontalScrollLock.enabled) return;
+        if (isHorizontalScrollMode()) return;
+        if (container.scrollLeft !== horizontalScrollLock.position) {
+            container.scrollLeft = horizontalScrollLock.position;
+        }
+    }, { passive: true });
+
+    const eventBus = PDFViewerApplication.eventBus;
+    if (!eventBus) return;
+
+    // Zoom changes the scrollable width, so the frozen position can fall outside it.
+    eventBus.on("scalechanging", () => setTimeout(clampHorizontalScrollLock, 0));
+
+    // Switching to horizontal scroll mode has to release the lock, or the document
+    // cannot be read at all.
+    eventBus.on("scrollmodechanged", () => {
+        if (isHorizontalScrollMode()) horizontalScrollLock.enabled = false;
+    });
+}
+// #endregion
+
+// #region highlight rendering
+
 function setupHighlightRendering() {
     const eventBus = PDFViewerApplication.eventBus;
     if (!eventBus) return;

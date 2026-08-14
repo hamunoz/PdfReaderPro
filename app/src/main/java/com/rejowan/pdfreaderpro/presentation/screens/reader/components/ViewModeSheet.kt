@@ -37,6 +37,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.Check
 import androidx.compose.material.icons.rounded.GridView
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.LinearScale
 import androidx.compose.material.icons.rounded.SwapHoriz
 import androidx.compose.material.icons.rounded.SwapVert
@@ -63,6 +64,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -78,17 +80,21 @@ import kotlinx.coroutines.delay
 // Design colors
 private val AccentPurple = Color(0xFF9575CD)
 private val AccentTeal = Color(0xFF4DB6AC)
+private val AccentAmber = Color(0xFFFFB74D)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ViewModeSheet(
     currentScrollMode: ScrollMode,
     isSnapEnabled: Boolean,
+    lockHorizontalScroll: Boolean,
+    canLockHorizontalScroll: Boolean,
     isAutoHideToolbar: Boolean,
     isScrubberOnScroll: Boolean,
     isTapToTurnPage: Boolean,
     onScrollModeChange: (ScrollMode) -> Unit,
     onSnapToggle: (Boolean) -> Unit,
+    onLockHorizontalScrollToggle: (Boolean) -> Unit,
     onAutoHideToolbarToggle: (Boolean) -> Unit,
     onScrubberOnScrollToggle: (Boolean) -> Unit,
     onTapToTurnPageToggle: (Boolean) -> Unit,
@@ -101,11 +107,14 @@ fun ViewModeSheet(
         ViewModeSideSheet(
             currentScrollMode = currentScrollMode,
             isSnapEnabled = isSnapEnabled,
+            lockHorizontalScroll = lockHorizontalScroll,
+            canLockHorizontalScroll = canLockHorizontalScroll,
             isAutoHideToolbar = isAutoHideToolbar,
             isScrubberOnScroll = isScrubberOnScroll,
             isTapToTurnPage = isTapToTurnPage,
             onScrollModeChange = onScrollModeChange,
             onSnapToggle = onSnapToggle,
+            onLockHorizontalScrollToggle = onLockHorizontalScrollToggle,
             onAutoHideToolbarToggle = onAutoHideToolbarToggle,
             onScrubberOnScrollToggle = onScrubberOnScrollToggle,
             onTapToTurnPageToggle = onTapToTurnPageToggle,
@@ -115,11 +124,14 @@ fun ViewModeSheet(
         ViewModeBottomSheet(
             currentScrollMode = currentScrollMode,
             isSnapEnabled = isSnapEnabled,
+            lockHorizontalScroll = lockHorizontalScroll,
+            canLockHorizontalScroll = canLockHorizontalScroll,
             isAutoHideToolbar = isAutoHideToolbar,
             isScrubberOnScroll = isScrubberOnScroll,
             isTapToTurnPage = isTapToTurnPage,
             onScrollModeChange = onScrollModeChange,
             onSnapToggle = onSnapToggle,
+            onLockHorizontalScrollToggle = onLockHorizontalScrollToggle,
             onAutoHideToolbarToggle = onAutoHideToolbarToggle,
             onScrubberOnScrollToggle = onScrubberOnScrollToggle,
             onTapToTurnPageToggle = onTapToTurnPageToggle,
@@ -133,11 +145,14 @@ fun ViewModeSheet(
 private fun ViewModeBottomSheet(
     currentScrollMode: ScrollMode,
     isSnapEnabled: Boolean,
+    lockHorizontalScroll: Boolean,
+    canLockHorizontalScroll: Boolean,
     isAutoHideToolbar: Boolean,
     isScrubberOnScroll: Boolean,
     isTapToTurnPage: Boolean,
     onScrollModeChange: (ScrollMode) -> Unit,
     onSnapToggle: (Boolean) -> Unit,
+    onLockHorizontalScrollToggle: (Boolean) -> Unit,
     onAutoHideToolbarToggle: (Boolean) -> Unit,
     onScrubberOnScrollToggle: (Boolean) -> Unit,
     onTapToTurnPageToggle: (Boolean) -> Unit,
@@ -155,11 +170,14 @@ private fun ViewModeBottomSheet(
         ViewModeSheetContent(
             currentScrollMode = currentScrollMode,
             isSnapEnabled = isSnapEnabled,
+            lockHorizontalScroll = lockHorizontalScroll,
+            canLockHorizontalScroll = canLockHorizontalScroll,
             isAutoHideToolbar = isAutoHideToolbar,
             isScrubberOnScroll = isScrubberOnScroll,
             isTapToTurnPage = isTapToTurnPage,
             onScrollModeChange = onScrollModeChange,
             onSnapToggle = onSnapToggle,
+            onLockHorizontalScrollToggle = onLockHorizontalScrollToggle,
             onAutoHideToolbarToggle = onAutoHideToolbarToggle,
             onScrubberOnScrollToggle = onScrubberOnScrollToggle,
             onTapToTurnPageToggle = onTapToTurnPageToggle,
@@ -172,11 +190,14 @@ private fun ViewModeBottomSheet(
 private fun ViewModeSideSheet(
     currentScrollMode: ScrollMode,
     isSnapEnabled: Boolean,
+    lockHorizontalScroll: Boolean,
+    canLockHorizontalScroll: Boolean,
     isAutoHideToolbar: Boolean,
     isScrubberOnScroll: Boolean,
     isTapToTurnPage: Boolean,
     onScrollModeChange: (ScrollMode) -> Unit,
     onSnapToggle: (Boolean) -> Unit,
+    onLockHorizontalScrollToggle: (Boolean) -> Unit,
     onAutoHideToolbarToggle: (Boolean) -> Unit,
     onScrubberOnScrollToggle: (Boolean) -> Unit,
     onTapToTurnPageToggle: (Boolean) -> Unit,
@@ -230,11 +251,14 @@ private fun ViewModeSideSheet(
                 ViewModeSheetContent(
                     currentScrollMode = currentScrollMode,
                     isSnapEnabled = isSnapEnabled,
+                    lockHorizontalScroll = lockHorizontalScroll,
+                    canLockHorizontalScroll = canLockHorizontalScroll,
                     isAutoHideToolbar = isAutoHideToolbar,
                     isScrubberOnScroll = isScrubberOnScroll,
                     isTapToTurnPage = isTapToTurnPage,
                     onScrollModeChange = onScrollModeChange,
                     onSnapToggle = onSnapToggle,
+                    onLockHorizontalScrollToggle = onLockHorizontalScrollToggle,
                     onAutoHideToolbarToggle = onAutoHideToolbarToggle,
                     onScrubberOnScrollToggle = onScrubberOnScrollToggle,
                     onTapToTurnPageToggle = onTapToTurnPageToggle,
@@ -255,11 +279,14 @@ private fun ViewModeSideSheet(
 private fun ViewModeSheetContent(
     currentScrollMode: ScrollMode,
     isSnapEnabled: Boolean,
+    lockHorizontalScroll: Boolean,
+    canLockHorizontalScroll: Boolean,
     isAutoHideToolbar: Boolean,
     isScrubberOnScroll: Boolean,
     isTapToTurnPage: Boolean,
     onScrollModeChange: (ScrollMode) -> Unit,
     onSnapToggle: (Boolean) -> Unit,
+    onLockHorizontalScrollToggle: (Boolean) -> Unit,
     onAutoHideToolbarToggle: (Boolean) -> Unit,
     onScrubberOnScrollToggle: (Boolean) -> Unit,
     onTapToTurnPageToggle: (Boolean) -> Unit,
@@ -312,6 +339,21 @@ private fun ViewModeSheetContent(
         Spacer(modifier = Modifier.height(12.dp))
         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
         Spacer(modifier = Modifier.height(12.dp))
+
+        // Sits directly under Scroll mode, since it only applies to vertical.
+        ToggleRow(
+            icon = Icons.Rounded.Lock,
+            title = stringResource(R.string.lock_horizontal_scroll),
+            description = stringResource(R.string.lock_horizontal_scroll_desc),
+            isEnabled = lockHorizontalScroll,
+            onToggle = onLockHorizontalScrollToggle,
+            accentColor = AccentAmber,
+            animationDelay = 140,
+            isAvailable = canLockHorizontalScroll,
+            unavailableDescription = stringResource(R.string.lock_horizontal_scroll_unavailable)
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
 
         // Toggles Section
         ToggleRow(
@@ -553,7 +595,11 @@ private fun ToggleRow(
     onToggle: (Boolean) -> Unit,
     accentColor: Color,
     animationDelay: Int,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    // Dims the row and blocks the switch while the setting does not apply. Shown
+    // rather than hidden, so a setting never appears to vanish.
+    isAvailable: Boolean = true,
+    unavailableDescription: String? = null
 ) {
     var isVisible by remember { mutableStateOf(false) }
 
@@ -578,6 +624,7 @@ private fun ToggleRow(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .alpha(if (isAvailable) 1f else 0.5f)
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -606,15 +653,18 @@ private fun ToggleRow(
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = description,
+                    // When unavailable, say why rather than leaving a dimmed row
+                    // with no explanation.
+                    text = if (isAvailable) description else unavailableDescription ?: description,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                 )
             }
 
             Switch(
-                checked = isEnabled,
+                checked = isEnabled && isAvailable,
                 onCheckedChange = onToggle,
+                enabled = isAvailable,
                 colors = SwitchDefaults.colors(
                     checkedThumbColor = Color.White,
                     checkedTrackColor = accentColor,

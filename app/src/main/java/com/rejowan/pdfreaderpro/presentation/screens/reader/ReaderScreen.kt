@@ -598,6 +598,8 @@ fun ReaderScreen(
         ViewModeSheet(
             currentScrollMode = state.scrollMode,
             isSnapEnabled = state.isSnapEnabled,
+            lockHorizontalScroll = state.lockHorizontalScroll,
+            canLockHorizontalScroll = state.canLockHorizontalScroll,
             isAutoHideToolbar = state.autoHideToolbar,
             isScrubberOnScroll = state.scrubberOnScroll,
             isTapToTurnPage = state.tapToTurnPage,
@@ -606,6 +608,9 @@ fun ReaderScreen(
             },
             onSnapToggle = { enabled ->
                 viewModel.onAction(ReaderAction.SetSnapEnabled(enabled))
+            },
+            onLockHorizontalScrollToggle = { enabled ->
+                viewModel.onAction(ReaderAction.SetLockHorizontalScroll(enabled))
             },
             onAutoHideToolbarToggle = { enabled ->
                 viewModel.onAction(ReaderAction.SetAutoHideToolbar(enabled))

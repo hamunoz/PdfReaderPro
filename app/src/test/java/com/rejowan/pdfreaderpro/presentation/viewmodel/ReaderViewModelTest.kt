@@ -10,6 +10,8 @@ import com.rejowan.pdfreaderpro.presentation.components.pdf.model.PdfQuad
 import com.rejowan.pdfreaderpro.presentation.components.pdf.model.TextSelection
 import com.rejowan.pdfreaderpro.presentation.screens.reader.HighlightColors
 import kotlinx.coroutines.flow.MutableStateFlow
+import com.rejowan.pdfreaderpro.data.local.database.dao.FilePreferenceDao
+import com.rejowan.pdfreaderpro.data.local.database.entity.FilePreferenceEntity
 import com.rejowan.pdfreaderpro.data.local.database.dao.AnnotationDao
 import com.rejowan.pdfreaderpro.data.local.database.dao.BookmarkDao
 import com.rejowan.pdfreaderpro.data.local.database.entity.BookmarkEntity
@@ -54,6 +56,7 @@ class ReaderViewModelTest {
     private lateinit var preferencesRepository: PreferencesRepository
     private lateinit var bookmarkDao: BookmarkDao
     private lateinit var annotationDao: AnnotationDao
+    private lateinit var filePreferenceDao: FilePreferenceDao
     private lateinit var applicationContext: Context
     private lateinit var savedStateHandle: SavedStateHandle
     private lateinit var passwordStorage: PasswordStorage
@@ -71,6 +74,7 @@ class ReaderViewModelTest {
         preferencesRepository = mockk(relaxed = true)
         bookmarkDao = mockk(relaxed = true)
         annotationDao = mockk(relaxed = true)
+        filePreferenceDao = mockk(relaxed = true)
         applicationContext = mockk(relaxed = true)
         passwordStorage = mockk(relaxed = true)
 
@@ -84,6 +88,8 @@ class ReaderViewModelTest {
         every { preferencesRepository.preferences } returns flowOf(AppPreferences())
         every { bookmarkDao.getBookmarksForPdf(any()) } returns flowOf(emptyList())
         every { annotationDao.getHighlightsForPdf(any()) } returns flowOf(emptyList())
+        every { filePreferenceDao.observe(any()) } returns flowOf(null)
+        coEvery { filePreferenceDao.get(any()) } returns null
         coEvery { favoriteRepository.isFavorite(any()) } returns false
         coEvery { recentRepository.getLastPage(any()) } returns null
     }
@@ -101,6 +107,7 @@ class ReaderViewModelTest {
             preferencesRepository = preferencesRepository,
             bookmarkDao = bookmarkDao,
             annotationDao = annotationDao,
+            filePreferenceDao = filePreferenceDao,
             applicationContext = applicationContext,
             savedStateHandle = savedStateHandle,
             passwordStorage = passwordStorage
@@ -1110,6 +1117,153 @@ class ReaderViewModelTest {
         advanceUntilIdle()
 
         assertEquals("", viewModel.state.value.highlightsSheetQuery)
+    }
+    // endregion
+
+    // region Horizontal scroll lock (#74)
+
+    @Test
+    fun `horizontal lock is off by default`() = runTest {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        assertFalse(viewModel.state.value.lockHorizontalScroll)
+    }
+
+    @Test
+    fun `a stored lock is restored when the document opens`() = runTest {
+        every { filePreferenceDao.observe(any()) } returns flowOf(
+            FilePreferenceEntity(pdfPath = testPdfPath, lockHorizontalScroll = true)
+        )
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        assertTrue(viewModel.state.value.lockHorizontalScroll)
+    }
+
+    @Test
+    fun `enabling the lock persists it for this document`() = runTest {
+        val saved = slot<FilePreferenceEntity>()
+        coEvery { filePreferenceDao.save(capture(saved)) } returns Unit
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onAction(ReaderAction.SetLockHorizontalScroll(true))
+        advanceUntilIdle()
+
+        assertTrue(viewModel.state.value.lockHorizontalScroll)
+        assertTrue(saved.captured.lockHorizontalScroll)
+        assertEquals(testPdfPath, saved.captured.pdfPath)
+    }
+
+    @Test
+    fun `the lock is available in vertical scroll mode`() = runTest {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onAction(ReaderAction.SetScrollMode(ScrollMode.VERTICAL))
+        advanceUntilIdle()
+
+        assertTrue(viewModel.state.value.canLockHorizontalScroll)
+    }
+
+    /**
+     * Horizontal scroll mode needs that axis to move between pages, so locking it
+     * would strand the reader on one page.
+     */
+    @Test
+    fun `the lock is unavailable in horizontal scroll mode`() = runTest {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onAction(ReaderAction.SetScrollMode(ScrollMode.HORIZONTAL))
+        advanceUntilIdle()
+
+        assertFalse(viewModel.state.value.canLockHorizontalScroll)
+    }
+
+    @Test
+    fun `the lock cannot be turned on in horizontal scroll mode`() = runTest {
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onAction(ReaderAction.SetScrollMode(ScrollMode.HORIZONTAL))
+        viewModel.onAction(ReaderAction.SetLockHorizontalScroll(true))
+        advanceUntilIdle()
+
+        assertFalse(viewModel.state.value.lockHorizontalScroll)
+    }
+
+    @Test
+    fun `switching to horizontal scroll mode releases an active lock`() = runTest {
+        coEvery { filePreferenceDao.save(any()) } returns Unit
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onAction(ReaderAction.SetLockHorizontalScroll(true))
+        advanceUntilIdle()
+        assertTrue(viewModel.state.value.lockHorizontalScroll)
+
+        viewModel.onAction(ReaderAction.SetScrollMode(ScrollMode.HORIZONTAL))
+        advanceUntilIdle()
+
+        assertFalse(viewModel.state.value.lockHorizontalScroll)
+    }
+
+    @Test
+    fun `releasing the lock on a mode switch is persisted too`() = runTest {
+        val saved = mutableListOf<FilePreferenceEntity>()
+        coEvery { filePreferenceDao.save(capture(saved)) } returns Unit
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onAction(ReaderAction.SetLockHorizontalScroll(true))
+        advanceUntilIdle()
+        viewModel.onAction(ReaderAction.SetScrollMode(ScrollMode.HORIZONTAL))
+        advanceUntilIdle()
+
+        assertFalse(saved.last().lockHorizontalScroll)
+    }
+
+    @Test
+    fun `turning the lock off persists that too`() = runTest {
+        val saved = mutableListOf<FilePreferenceEntity>()
+        coEvery { filePreferenceDao.save(capture(saved)) } returns Unit
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onAction(ReaderAction.SetLockHorizontalScroll(true))
+        viewModel.onAction(ReaderAction.SetLockHorizontalScroll(false))
+        advanceUntilIdle()
+
+        assertFalse(viewModel.state.value.lockHorizontalScroll)
+        assertFalse(saved.last().lockHorizontalScroll)
+    }
+
+    @Test
+    fun `an existing preference row is updated rather than replaced wholesale`() = runTest {
+        coEvery { filePreferenceDao.get(testPdfPath) } returns FilePreferenceEntity(
+            pdfPath = testPdfPath,
+            lockHorizontalScroll = false,
+            updatedAt = 1000L
+        )
+        val saved = slot<FilePreferenceEntity>()
+        coEvery { filePreferenceDao.save(capture(saved)) } returns Unit
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onAction(ReaderAction.SetLockHorizontalScroll(true))
+        advanceUntilIdle()
+
+        assertEquals(testPdfPath, saved.captured.pdfPath)
+        assertTrue(saved.captured.lockHorizontalScroll)
+        assertTrue("updatedAt should move forward", saved.captured.updatedAt > 1000L)
     }
     // endregion
 }

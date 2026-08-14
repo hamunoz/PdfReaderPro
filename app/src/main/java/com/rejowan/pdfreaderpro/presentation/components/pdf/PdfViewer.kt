@@ -1760,6 +1760,20 @@ class PdfViewer @JvmOverloads constructor(
     }
 
     /**
+     * Freezes horizontal panning at the page's current horizontal position.
+     *
+     * Deliberately holds wherever the reader has panned to rather than re-centring,
+     * so someone who lined the page up on a particular column stays on it.
+     *
+     * Ignored in [PageScrollMode.HORIZONTAL]: that is the axis the document scrolls
+     * along, and locking it would strand the reader on one page. The viewer also
+     * releases the lock by itself if the scroll mode changes while it is on.
+     */
+    fun setHorizontalScrollLock(locked: Boolean) {
+        webView callDirectly "setHorizontalScrollLock"(locked)
+    }
+
+    /**
      * Replaces the highlights drawn over the document.
      *
      * The viewer holds these itself and redraws them as pages scroll in and out, and

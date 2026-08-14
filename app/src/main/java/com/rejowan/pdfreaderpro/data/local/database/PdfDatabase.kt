@@ -6,10 +6,12 @@ import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 import com.rejowan.pdfreaderpro.data.local.database.dao.AnnotationDao
 import com.rejowan.pdfreaderpro.data.local.database.dao.BookmarkDao
+import com.rejowan.pdfreaderpro.data.local.database.dao.FilePreferenceDao
 import com.rejowan.pdfreaderpro.data.local.database.dao.FavoriteDao
 import com.rejowan.pdfreaderpro.data.local.database.dao.RecentDao
 import com.rejowan.pdfreaderpro.data.local.database.entity.AnnotationEntity
 import com.rejowan.pdfreaderpro.data.local.database.entity.BookmarkEntity
+import com.rejowan.pdfreaderpro.data.local.database.entity.FilePreferenceEntity
 import com.rejowan.pdfreaderpro.data.local.database.entity.FavoriteEntity
 import com.rejowan.pdfreaderpro.data.local.database.entity.RecentEntity
 
@@ -18,9 +20,10 @@ import com.rejowan.pdfreaderpro.data.local.database.entity.RecentEntity
         RecentEntity::class,
         FavoriteEntity::class,
         BookmarkEntity::class,
-        AnnotationEntity::class
+        AnnotationEntity::class,
+        FilePreferenceEntity::class
     ],
-    version = 8,
+    version = 9,
     exportSchema = true
 )
 abstract class PdfDatabase : RoomDatabase() {
@@ -29,9 +32,34 @@ abstract class PdfDatabase : RoomDatabase() {
     abstract fun favoriteDao(): FavoriteDao
     abstract fun bookmarkDao(): BookmarkDao
     abstract fun annotationDao(): AnnotationDao
+    abstract fun filePreferenceDao(): FilePreferenceDao
 
     companion object {
         const val DATABASE_NAME = "pdf_reader_db"
+
+        /**
+         * Migration from v8 to v9.
+         * Adds per-document reader settings (#74). Kept in its own table rather than
+         * on `recent`, so clearing the recent list does not wipe a document's
+         * settings.
+         */
+        val MIGRATION_8_9 = object : Migration(8, 9) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                // Column definitions match the exported v9 schema exactly, defaults
+                // included, since Room validates them at startup. The table is new
+                // and every write is an upsert, so no column needs a default.
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS file_preferences (
+                        pdfPath TEXT NOT NULL,
+                        lockHorizontalScroll INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL,
+                        PRIMARY KEY(pdfPath)
+                    )
+                    """
+                )
+            }
+        }
 
         /**
          * Migration from v7 to v8.
@@ -190,6 +218,7 @@ abstract class PdfDatabase : RoomDatabase() {
             }
         }
 
-        val migrations = arrayOf(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
+        val migrations =
+            arrayOf(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
     }
 }

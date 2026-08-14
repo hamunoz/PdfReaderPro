@@ -221,6 +221,7 @@ function setupHelper() {
 
     setupSelectionReporting();
     setupHighlightRendering();
+    setupHorizontalScrollLock();
 
     // Center the active match in the viewport instead of pinning it ~50px
     // below the top (PDF.js's MATCH_SCROLL_OFFSET_TOP). The original scroll

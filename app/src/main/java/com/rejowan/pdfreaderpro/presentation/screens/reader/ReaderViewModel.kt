@@ -9,6 +9,8 @@ import com.rejowan.pdfreaderpro.data.local.PasswordStorage
 import com.rejowan.pdfreaderpro.data.local.database.dao.AnnotationDao
 import com.rejowan.pdfreaderpro.data.local.database.dao.BookmarkDao
 import com.rejowan.pdfreaderpro.data.local.database.entity.BookmarkEntity
+import com.rejowan.pdfreaderpro.data.local.database.dao.FilePreferenceDao
+import com.rejowan.pdfreaderpro.data.local.database.entity.FilePreferenceEntity
 import com.rejowan.pdfreaderpro.data.mapper.toEntity
 import com.rejowan.pdfreaderpro.data.mapper.toHighlight
 import com.rejowan.pdfreaderpro.domain.model.Highlight
@@ -52,6 +54,7 @@ class ReaderViewModel(
     private val preferencesRepository: PreferencesRepository,
     private val bookmarkDao: BookmarkDao,
     private val annotationDao: AnnotationDao,
+    private val filePreferenceDao: FilePreferenceDao,
     private val applicationContext: Context,
     savedStateHandle: SavedStateHandle,
     private val passwordStorage: PasswordStorage = PasswordStorage(applicationContext)
@@ -136,11 +139,30 @@ class ReaderViewModel(
             }
             .launchIn(viewModelScope)
 
+        // Observe this document's own settings, which are separate from the global ones
+        filePreferenceDao.observe(pdfPath)
+            .onEach { preference ->
+                val locked = preference?.lockHorizontalScroll == true
+                _state.update { it.copy(lockHorizontalScroll = locked) }
+                applyHorizontalScrollLock(locked)
+            }
+            .launchIn(viewModelScope)
+
         // Load favorite state
         viewModelScope.launch {
             val isFav = favoriteRepository.isFavorite(pdfPath)
             _state.update { it.copy(isFavorite = isFav) }
         }
+    }
+
+    /**
+     * Pushes the horizontal lock to the viewer.
+     *
+     * A no-op until the viewer is attached, so [setPdfViewer] applies it again once
+     * it is.
+     */
+    private fun applyHorizontalScrollLock(locked: Boolean) {
+        pdfViewer?.setHorizontalScrollLock(locked)
     }
 
     /**
@@ -302,8 +324,9 @@ class ReaderViewModel(
     fun setPdfViewer(viewer: PdfViewer) {
         pdfViewer = viewer
         setupPdfViewerListeners(viewer)
-        // Highlights may have loaded from the database before the viewer attached.
+        // Both may have loaded from the database before the viewer attached.
         renderHighlights(_state.value.highlights)
+        applyHorizontalScrollLock(_state.value.lockHorizontalScroll)
     }
 
     private fun applyInitialSettings(viewer: PdfViewer) {
@@ -699,6 +722,21 @@ class ReaderViewModel(
                     ScrollMode.HORIZONTAL -> PdfViewer.PageScrollMode.HORIZONTAL
                 }
                 pdfViewer?.pageScrollMode = scrollMode
+                // Horizontal mode needs that axis, so the lock cannot survive the
+                // switch. The viewer releases it too; this keeps our state honest.
+                if (action.mode == ScrollMode.HORIZONTAL && _state.value.lockHorizontalScroll) {
+                    _state.update { it.copy(lockHorizontalScroll = false) }
+                    applyHorizontalScrollLock(false)
+                    viewModelScope.launch {
+                        filePreferenceDao.save(
+                            (filePreferenceDao.get(pdfPath) ?: FilePreferenceEntity(pdfPath = pdfPath))
+                                .copy(
+                                    lockHorizontalScroll = false,
+                                    updatedAt = System.currentTimeMillis()
+                                )
+                        )
+                    }
+                }
                 // Persist to global settings
                 viewModelScope.launch {
                     val domainMode = when (action.mode) {
@@ -780,6 +818,23 @@ class ReaderViewModel(
                 _state.update { it.copy(tapToTurnPage = action.enabled) }
                 viewModelScope.launch {
                     preferencesRepository.setReaderTapToTurnPage(action.enabled)
+                }
+            }
+
+            is ReaderAction.SetLockHorizontalScroll -> {
+                // Nothing to lock along the axis the document scrolls on.
+                if (!_state.value.canLockHorizontalScroll) return
+
+                _state.update { it.copy(lockHorizontalScroll = action.enabled) }
+                applyHorizontalScrollLock(action.enabled)
+                viewModelScope.launch {
+                    filePreferenceDao.save(
+                        (filePreferenceDao.get(pdfPath) ?: FilePreferenceEntity(pdfPath = pdfPath))
+                            .copy(
+                                lockHorizontalScroll = action.enabled,
+                                updatedAt = System.currentTimeMillis()
+                            )
+                    )
                 }
             }
 

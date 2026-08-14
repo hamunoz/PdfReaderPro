@@ -160,7 +160,13 @@ data class ReaderState(
     /** Confirmation for writing highlights into a copy of the PDF. */
     val isBakeHighlightsDialogVisible: Boolean = false,
 
-    val isBakingHighlights: Boolean = false
+    val isBakingHighlights: Boolean = false,
+
+    /**
+     * Freezes horizontal panning at the page's current position. Stored per
+     * document, not globally, and only meaningful in vertical scroll mode.
+     */
+    val lockHorizontalScroll: Boolean = false
 ) {
     val pageLabel: String
         get() = "${currentPage + 1} / $totalPages"
@@ -168,6 +174,16 @@ data class ReaderState(
     /** The highlight the colour picker is currently editing, if any. */
     val editingHighlight: Highlight?
         get() = editingHighlightId?.let { id -> highlights.firstOrNull { it.id == id } }
+
+    /**
+     * Whether the horizontal lock can be used right now.
+     *
+     * Horizontal scroll mode needs that axis to move between pages, so the toggle
+     * is shown disabled rather than hidden, which would leave people hunting for a
+     * setting that silently vanished.
+     */
+    val canLockHorizontalScroll: Boolean
+        get() = scrollMode == ScrollMode.VERTICAL
 
     /** 1-based position for the navigation strip, e.g. "3 / 12". */
     val highlightPositionLabel: String
@@ -291,6 +307,7 @@ sealed class ReaderAction {
     data class SetAutoHideToolbar(val enabled: Boolean) : ReaderAction()
     data class SetScrubberOnScroll(val enabled: Boolean) : ReaderAction()
     data class SetTapToTurnPage(val enabled: Boolean) : ReaderAction()
+    data class SetLockHorizontalScroll(val enabled: Boolean) : ReaderAction()
     data class OpenLink(val url: String) : ReaderAction()
 
     // Search
