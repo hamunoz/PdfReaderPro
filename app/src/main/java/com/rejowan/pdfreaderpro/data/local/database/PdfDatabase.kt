@@ -20,7 +20,7 @@ import com.rejowan.pdfreaderpro.data.local.database.entity.RecentEntity
         BookmarkEntity::class,
         AnnotationEntity::class
     ],
-    version = 7,
+    version = 8,
     exportSchema = true
 )
 abstract class PdfDatabase : RoomDatabase() {
@@ -32,6 +32,25 @@ abstract class PdfDatabase : RoomDatabase() {
 
     companion object {
         const val DATABASE_NAME = "pdf_reader_db"
+
+        /**
+         * Migration from v7 to v8.
+         * Extends annotations to support text highlights (#41):
+         * - selectedText: the highlighted text, for the panel and search
+         * - quads: JSON rectangles, one per line, so multi-line selections work
+         * - label: optional user tag for categorising highlights
+         * - sortIndex: order within a page, drives next/previous navigation
+         *
+         * Additive only. The legacy startX/startY/endX/endY columns are left in place.
+         */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE annotations ADD COLUMN selectedText TEXT")
+                db.execSQL("ALTER TABLE annotations ADD COLUMN quads TEXT")
+                db.execSQL("ALTER TABLE annotations ADD COLUMN label TEXT")
+                db.execSQL("ALTER TABLE annotations ADD COLUMN sortIndex INTEGER NOT NULL DEFAULT 0")
+            }
+        }
 
         /**
          * Migration from v6 to v7.
@@ -171,6 +190,6 @@ abstract class PdfDatabase : RoomDatabase() {
             }
         }
 
-        val migrations = arrayOf(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+        val migrations = arrayOf(MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
     }
 }

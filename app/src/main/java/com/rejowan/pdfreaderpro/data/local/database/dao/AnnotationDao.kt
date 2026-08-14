@@ -21,6 +21,39 @@ interface AnnotationDao {
     @Query("SELECT * FROM annotations WHERE id = :id")
     suspend fun getById(id: Long): AnnotationEntity?
 
+    /**
+     * Highlights for a PDF, in reading order. The panel and next/previous navigation
+     * both use this ordering so they can never disagree about which highlight is next.
+     */
+    @Query(
+        """
+        SELECT * FROM annotations
+        WHERE pdfPath = :pdfPath AND type = 'highlight'
+        ORDER BY pageNumber ASC, sortIndex ASC, createdAt ASC
+        """
+    )
+    fun getHighlightsForPdf(pdfPath: String): Flow<List<AnnotationEntity>>
+
+    /** Highlights whose text contains [query], in the same reading order. */
+    @Query(
+        """
+        SELECT * FROM annotations
+        WHERE pdfPath = :pdfPath AND type = 'highlight'
+          AND selectedText LIKE '%' || :query || '%'
+        ORDER BY pageNumber ASC, sortIndex ASC, createdAt ASC
+        """
+    )
+    fun searchHighlights(pdfPath: String, query: String): Flow<List<AnnotationEntity>>
+
+    /** Highest sortIndex on a page, so a new highlight can be appended after it. */
+    @Query(
+        """
+        SELECT MAX(sortIndex) FROM annotations
+        WHERE pdfPath = :pdfPath AND pageNumber = :pageNumber AND type = 'highlight'
+        """
+    )
+    suspend fun getMaxSortIndexForPage(pdfPath: String, pageNumber: Int): Int?
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insert(annotation: AnnotationEntity): Long
 
