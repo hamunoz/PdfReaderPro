@@ -54,6 +54,7 @@ import com.rejowan.pdfreaderpro.R
 import com.rejowan.pdfreaderpro.presentation.components.pdf.PdfViewer
 import com.rejowan.pdfreaderpro.presentation.components.pdf.print.DefaultPdfPrintAdapter
 import com.rejowan.pdfreaderpro.presentation.screens.reader.components.HighlightColorPicker
+import com.rejowan.pdfreaderpro.presentation.screens.reader.components.HighlightsSheet
 import com.rejowan.pdfreaderpro.presentation.screens.reader.components.DeleteConfirmDialog
 import com.rejowan.pdfreaderpro.presentation.screens.reader.components.EnhancedTableOfContents
 import com.rejowan.pdfreaderpro.presentation.screens.reader.components.ErrorState
@@ -639,9 +640,27 @@ fun ReaderScreen(
         )
     }
 
+    // Highlights Sheet
+    if (state.isHighlightsSheetVisible) {
+        HighlightsSheet(
+            highlights = state.highlights,
+            currentPage = state.currentPage,
+            onHighlightClick = { highlight ->
+                viewModel.onAction(ReaderAction.GoToHighlight(highlight.id))
+            },
+            onDeleteHighlight = { highlight ->
+                viewModel.onAction(ReaderAction.DeleteHighlight(highlight.id))
+            },
+            onDismiss = { viewModel.onAction(ReaderAction.HideHighlightsSheet) }
+        )
+    }
+
     // More Options Sheet
     if (state.isMoreOptionsSheetVisible) {
         MoreOptionsSheet(
+            onHighlightsClick = {
+                viewModel.onAction(ReaderAction.ShowHighlightsSheet)
+            },
             onBookmarksClick = {
                 viewModel.onAction(ReaderAction.ShowBookmarksSheet)
             },

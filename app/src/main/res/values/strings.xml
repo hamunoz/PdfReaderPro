@@ -271,6 +271,10 @@
     <string name="highlight_page">Page %d</string>
     <string name="highlight_count">%d highlight</string>
     <string name="highlights_count">%d highlights</string>
+    <string name="view_manage_highlights">View and manage highlights</string>
+    <string name="search_highlights">Search highlights</string>
+    <string name="no_matching_highlights">No matches</string>
+    <string name="no_matching_highlights_hint">Try a different search or colour</string>
 
     <string name="table_of_contents">Table of Contents</string>
     <string name="no_table_of_contents">No table of contents</string>

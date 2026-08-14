@@ -33,6 +33,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Bookmark
+import androidx.compose.material.icons.rounded.FormatColorFill
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Numbers
@@ -79,6 +80,7 @@ private val AccentPink = Color(0xFFF48FB1)
 @Composable
 fun MoreOptionsSheet(
     onBookmarksClick: () -> Unit,
+    onHighlightsClick: () -> Unit,
     onAutoScrollClick: () -> Unit,
     onGoToPageClick: () -> Unit,
     onPrintClick: () -> Unit,
@@ -92,6 +94,7 @@ fun MoreOptionsSheet(
     if (isLandscape) {
         MoreOptionsSideSheet(
             onBookmarksClick = onBookmarksClick,
+            onHighlightsClick = onHighlightsClick,
             onAutoScrollClick = onAutoScrollClick,
             onGoToPageClick = onGoToPageClick,
             onPrintClick = onPrintClick,
@@ -102,6 +105,7 @@ fun MoreOptionsSheet(
     } else {
         MoreOptionsBottomSheet(
             onBookmarksClick = onBookmarksClick,
+            onHighlightsClick = onHighlightsClick,
             onAutoScrollClick = onAutoScrollClick,
             onGoToPageClick = onGoToPageClick,
             onPrintClick = onPrintClick,
@@ -116,6 +120,7 @@ fun MoreOptionsSheet(
 @Composable
 private fun MoreOptionsBottomSheet(
     onBookmarksClick: () -> Unit,
+    onHighlightsClick: () -> Unit,
     onAutoScrollClick: () -> Unit,
     onGoToPageClick: () -> Unit,
     onPrintClick: () -> Unit,
@@ -134,6 +139,7 @@ private fun MoreOptionsBottomSheet(
     ) {
         MoreOptionsSheetContent(
             onBookmarksClick = onBookmarksClick,
+            onHighlightsClick = onHighlightsClick,
             onAutoScrollClick = onAutoScrollClick,
             onGoToPageClick = onGoToPageClick,
             onPrintClick = onPrintClick,
@@ -148,6 +154,7 @@ private fun MoreOptionsBottomSheet(
 @Composable
 private fun MoreOptionsSideSheet(
     onBookmarksClick: () -> Unit,
+    onHighlightsClick: () -> Unit,
     onAutoScrollClick: () -> Unit,
     onGoToPageClick: () -> Unit,
     onPrintClick: () -> Unit,
@@ -202,6 +209,7 @@ private fun MoreOptionsSideSheet(
             ) {
                 MoreOptionsSheetContent(
                     onBookmarksClick = onBookmarksClick,
+                    onHighlightsClick = onHighlightsClick,
                     onAutoScrollClick = onAutoScrollClick,
                     onGoToPageClick = onGoToPageClick,
                     onPrintClick = onPrintClick,
@@ -224,6 +232,7 @@ private fun MoreOptionsSideSheet(
 @Composable
 private fun MoreOptionsSheetContent(
     onBookmarksClick: () -> Unit,
+    onHighlightsClick: () -> Unit,
     onAutoScrollClick: () -> Unit,
     onGoToPageClick: () -> Unit,
     onPrintClick: () -> Unit,
@@ -257,6 +266,20 @@ private fun MoreOptionsSheetContent(
                 onBookmarksClick()
             },
             animationDelay = 0
+        )
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        OptionItem(
+            icon = Icons.Rounded.FormatColorFill,
+            title = stringResource(R.string.highlights),
+            subtitle = stringResource(R.string.view_manage_highlights),
+            accentColor = AccentAmber,
+            onClick = {
+                onDismiss()
+                onHighlightsClick()
+            },
+            animationDelay = 25
         )
 
         Spacer(modifier = Modifier.height(6.dp))
