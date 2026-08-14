@@ -118,7 +118,16 @@ class ReaderViewModel(
         annotationDao.getHighlightsForPdf(pdfPath)
             .onEach { entities ->
                 val highlights = entities.map { it.toHighlight() }
-                _state.update { it.copy(highlights = highlights) }
+                _state.update { state ->
+                    state.copy(
+                        highlights = highlights,
+                        // Deleting a highlight shrinks the list under the navigation
+                        // strip, so keep the index inside it.
+                        currentHighlightIndex =
+                            state.currentHighlightIndex.coerceAtMost(highlights.lastIndex),
+                        isHighlightNavVisible = state.isHighlightNavVisible && highlights.isNotEmpty()
+                    )
+                }
                 renderHighlights(highlights)
             }
             .launchIn(viewModelScope)
@@ -203,7 +212,44 @@ class ReaderViewModel(
 
     /** Jumps to a highlight's page, then pulses it once the page has rendered. */
     private fun goToHighlight(highlightId: Long) {
-        val highlight = _state.value.highlights.firstOrNull { it.id == highlightId } ?: return
+        val highlights = _state.value.highlights
+        val index = highlights.indexOfFirst { it.id == highlightId }
+        if (index < 0) return
+
+        _state.update {
+            it.copy(
+                isHighlightsSheetVisible = false,
+                currentHighlightIndex = index,
+                isHighlightNavVisible = true
+            )
+        }
+
+        scrollToHighlight(highlights[index])
+    }
+
+    /**
+     * Moves to the next or previous highlight, wrapping at both ends.
+     *
+     * Order comes straight from [ReaderState.highlights], which the DAO returns by
+     * page then sortIndex, so this and the panel can never disagree.
+     */
+    private fun stepHighlight(forward: Boolean) {
+        val highlights = _state.value.highlights
+        if (highlights.isEmpty()) return
+
+        val current = _state.value.currentHighlightIndex
+        val next = when {
+            // Nothing focused yet: start at either end depending on direction.
+            current < 0 -> if (forward) 0 else highlights.lastIndex
+            forward -> (current + 1) % highlights.size
+            else -> (current - 1 + highlights.size) % highlights.size
+        }
+
+        _state.update { it.copy(currentHighlightIndex = next, isHighlightNavVisible = true) }
+        scrollToHighlight(highlights[next])
+    }
+
+    private fun scrollToHighlight(highlight: Highlight) {
         val viewer = pdfViewer ?: return
 
         // Viewer pages are 1-based.
@@ -213,10 +259,8 @@ class ReaderViewModel(
             // scrollToHighlight only finds an element on a rendered page, and goToPage
             // does not render synchronously.
             delay(HIGHLIGHT_SCROLL_DELAY_MS)
-            viewer.scrollToHighlight(highlightId)
+            viewer.scrollToHighlight(highlight.id)
         }
-
-        _state.update { it.copy(isHighlightsSheetVisible = false) }
     }
 
     private fun Int.toCssRgba(alpha: Float): String {
@@ -845,6 +889,13 @@ class ReaderViewModel(
 
             is ReaderAction.ShowHighlightsSheet -> _state.update { it.copy(isHighlightsSheetVisible = true) }
             is ReaderAction.HideHighlightsSheet -> _state.update { it.copy(isHighlightsSheetVisible = false) }
+
+            is ReaderAction.NextHighlight -> stepHighlight(forward = true)
+            is ReaderAction.PreviousHighlight -> stepHighlight(forward = false)
+
+            is ReaderAction.HideHighlightNav -> {
+                _state.update { it.copy(isHighlightNavVisible = false, currentHighlightIndex = -1) }
+            }
 
             // Page rotation
             is ReaderAction.RotateClockwise -> {

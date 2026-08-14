@@ -143,7 +143,16 @@ data class ReaderState(
     // Set when the picker is editing an existing highlight rather than creating one
     val editingHighlightId: Long? = null,
 
-    val isHighlightsSheetVisible: Boolean = false
+    val isHighlightsSheetVisible: Boolean = false,
+
+    /**
+     * Index into [highlights] of the highlight currently being stepped through,
+     * or -1 when none is.
+     */
+    val currentHighlightIndex: Int = -1,
+
+    /** The prev/next strip, shown after jumping to a highlight. */
+    val isHighlightNavVisible: Boolean = false
 ) {
     val pageLabel: String
         get() = "${currentPage + 1} / $totalPages"
@@ -151,6 +160,10 @@ data class ReaderState(
     /** The highlight the colour picker is currently editing, if any. */
     val editingHighlight: Highlight?
         get() = editingHighlightId?.let { id -> highlights.firstOrNull { it.id == id } }
+
+    /** 1-based position for the navigation strip, e.g. "3 / 12". */
+    val highlightPositionLabel: String
+        get() = "${currentHighlightIndex + 1} / ${highlights.size}"
 }
 
 /**
@@ -333,4 +346,7 @@ sealed class ReaderAction {
     data class GoToHighlight(val highlightId: Long) : ReaderAction()
     data object ShowHighlightsSheet : ReaderAction()
     data object HideHighlightsSheet : ReaderAction()
+    data object NextHighlight : ReaderAction()
+    data object PreviousHighlight : ReaderAction()
+    data object HideHighlightNav : ReaderAction()
 }

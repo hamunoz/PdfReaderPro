@@ -9,6 +9,7 @@ import com.rejowan.pdfreaderpro.data.local.database.entity.AnnotationEntity
 import com.rejowan.pdfreaderpro.presentation.components.pdf.model.PdfQuad
 import com.rejowan.pdfreaderpro.presentation.components.pdf.model.TextSelection
 import com.rejowan.pdfreaderpro.presentation.screens.reader.HighlightColors
+import kotlinx.coroutines.flow.MutableStateFlow
 import com.rejowan.pdfreaderpro.data.local.database.dao.AnnotationDao
 import com.rejowan.pdfreaderpro.data.local.database.dao.BookmarkDao
 import com.rejowan.pdfreaderpro.data.local.database.entity.BookmarkEntity
@@ -862,6 +863,177 @@ class ReaderViewModelTest {
         assertEquals(1, highlights.size)
         assertEquals("osmosis", highlights[0].text)
         assertEquals(1, highlights[0].quads.size)
+    }
+    // endregion
+
+    // region Highlight navigation
+
+    private fun highlightEntity(id: Long, page: Int, sortIndex: Int = 0) = AnnotationEntity(
+        id = id,
+        pdfPath = testPdfPath,
+        pageNumber = page,
+        type = "highlight",
+        content = null,
+        color = HighlightColors.YELLOW,
+        selectedText = "text $id",
+        quads = """[{"x":0.1,"y":0.2,"w":0.3,"h":0.02}]""",
+        sortIndex = sortIndex
+    )
+
+    private fun withHighlights(vararg entities: AnnotationEntity) {
+        every { annotationDao.getHighlightsForPdf(any()) } returns flowOf(entities.toList())
+    }
+
+    @Test
+    fun `next highlight starts at the first one`() = runTest {
+        withHighlights(highlightEntity(1, 0), highlightEntity(2, 3), highlightEntity(3, 7))
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onAction(ReaderAction.NextHighlight)
+        advanceUntilIdle()
+
+        assertEquals(0, viewModel.state.value.currentHighlightIndex)
+        assertTrue(viewModel.state.value.isHighlightNavVisible)
+    }
+
+    @Test
+    fun `previous highlight from nothing starts at the last one`() = runTest {
+        withHighlights(highlightEntity(1, 0), highlightEntity(2, 3), highlightEntity(3, 7))
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onAction(ReaderAction.PreviousHighlight)
+        advanceUntilIdle()
+
+        assertEquals(2, viewModel.state.value.currentHighlightIndex)
+    }
+
+    @Test
+    fun `next highlight advances through the list`() = runTest {
+        withHighlights(highlightEntity(1, 0), highlightEntity(2, 3), highlightEntity(3, 7))
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onAction(ReaderAction.NextHighlight)
+        viewModel.onAction(ReaderAction.NextHighlight)
+        advanceUntilIdle()
+
+        assertEquals(1, viewModel.state.value.currentHighlightIndex)
+    }
+
+    @Test
+    fun `next highlight wraps around at the end`() = runTest {
+        withHighlights(highlightEntity(1, 0), highlightEntity(2, 3))
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        repeat(3) { viewModel.onAction(ReaderAction.NextHighlight) }
+        advanceUntilIdle()
+
+        assertEquals(0, viewModel.state.value.currentHighlightIndex)
+    }
+
+    @Test
+    fun `previous highlight wraps around at the start`() = runTest {
+        withHighlights(highlightEntity(1, 0), highlightEntity(2, 3))
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onAction(ReaderAction.NextHighlight)
+        viewModel.onAction(ReaderAction.PreviousHighlight)
+        advanceUntilIdle()
+
+        assertEquals(1, viewModel.state.value.currentHighlightIndex)
+    }
+
+    @Test
+    fun `stepping does nothing when there are no highlights`() = runTest {
+        withHighlights()
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onAction(ReaderAction.NextHighlight)
+        advanceUntilIdle()
+
+        assertEquals(-1, viewModel.state.value.currentHighlightIndex)
+        assertFalse(viewModel.state.value.isHighlightNavVisible)
+    }
+
+    @Test
+    fun `position label is one-based`() = runTest {
+        withHighlights(highlightEntity(1, 0), highlightEntity(2, 3), highlightEntity(3, 7))
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onAction(ReaderAction.NextHighlight)
+        advanceUntilIdle()
+
+        assertEquals("1 / 3", viewModel.state.value.highlightPositionLabel)
+    }
+
+    @Test
+    fun `closing the nav strip clears the position`() = runTest {
+        withHighlights(highlightEntity(1, 0), highlightEntity(2, 3))
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onAction(ReaderAction.NextHighlight)
+        viewModel.onAction(ReaderAction.HideHighlightNav)
+        advanceUntilIdle()
+
+        assertFalse(viewModel.state.value.isHighlightNavVisible)
+        assertEquals(-1, viewModel.state.value.currentHighlightIndex)
+    }
+
+    /**
+     * The list shrinks under the navigation strip when a highlight is deleted, so
+     * the index must not be left pointing past the end.
+     */
+    @Test
+    fun `index is clamped when the highlight list shrinks`() = runTest {
+        val flow = MutableStateFlow(
+            listOf(highlightEntity(1, 0), highlightEntity(2, 3), highlightEntity(3, 7))
+        )
+        every { annotationDao.getHighlightsForPdf(any()) } returns flow
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        repeat(3) { viewModel.onAction(ReaderAction.NextHighlight) }
+        advanceUntilIdle()
+        assertEquals(2, viewModel.state.value.currentHighlightIndex)
+
+        flow.value = listOf(highlightEntity(1, 0))
+        advanceUntilIdle()
+
+        assertEquals(0, viewModel.state.value.currentHighlightIndex)
+    }
+
+    @Test
+    fun `nav strip hides when the last highlight is deleted`() = runTest {
+        val flow = MutableStateFlow(listOf(highlightEntity(1, 0)))
+        every { annotationDao.getHighlightsForPdf(any()) } returns flow
+
+        viewModel = createViewModel()
+        advanceUntilIdle()
+
+        viewModel.onAction(ReaderAction.NextHighlight)
+        advanceUntilIdle()
+        assertTrue(viewModel.state.value.isHighlightNavVisible)
+
+        flow.value = emptyList()
+        advanceUntilIdle()
+
+        assertFalse(viewModel.state.value.isHighlightNavVisible)
     }
     // endregion
 }

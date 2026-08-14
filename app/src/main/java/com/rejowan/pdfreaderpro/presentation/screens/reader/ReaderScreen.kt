@@ -54,6 +54,7 @@ import com.rejowan.pdfreaderpro.R
 import com.rejowan.pdfreaderpro.presentation.components.pdf.PdfViewer
 import com.rejowan.pdfreaderpro.presentation.components.pdf.print.DefaultPdfPrintAdapter
 import com.rejowan.pdfreaderpro.presentation.screens.reader.components.HighlightColorPicker
+import com.rejowan.pdfreaderpro.presentation.screens.reader.components.HighlightNavBar
 import com.rejowan.pdfreaderpro.presentation.screens.reader.components.HighlightsSheet
 import com.rejowan.pdfreaderpro.presentation.screens.reader.components.DeleteConfirmDialog
 import com.rejowan.pdfreaderpro.presentation.screens.reader.components.EnhancedTableOfContents
@@ -436,6 +437,20 @@ fun ReaderScreen(
                     } else {
                         Modifier.align(Alignment.TopEnd)
                     }
+                )
+
+                // Highlight navigation strip, sits at the top so it does not collide
+                // with the colour picker or the control bar at the bottom.
+                HighlightNavBar(
+                    isVisible = state.isHighlightNavVisible && !state.isHighlightPickerVisible,
+                    positionLabel = state.highlightPositionLabel,
+                    onPrevious = { viewModel.onAction(ReaderAction.PreviousHighlight) },
+                    onNext = { viewModel.onAction(ReaderAction.NextHighlight) },
+                    onClose = { viewModel.onAction(ReaderAction.HideHighlightNav) },
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .windowInsetsPadding(WindowInsets.statusBars)
+                        .padding(top = if (state.isToolbarVisible && !state.isFullScreen) 72.dp else 16.dp)
                 )
 
                 // Highlight colour picker, sits above the control bar so it does not

@@ -273,6 +273,9 @@
     <string name="highlights_count">%d highlights</string>
     <string name="view_manage_highlights">View and manage highlights</string>
     <string name="search_highlights">Search highlights</string>
+    <string name="next_highlight">Next highlight</string>
+    <string name="previous_highlight">Previous highlight</string>
+    <string name="close_highlight_nav">Stop stepping through highlights</string>
     <string name="no_matching_highlights">No matches</string>
     <string name="no_matching_highlights_hint">Try a different search or colour</string>
 
