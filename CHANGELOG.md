@@ -9,6 +9,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.4.0] - 2026-08-15
+
+### Added
+- **Text Highlights** - Select any text and highlight it in one of five colours from the action bar that appears below the selection; highlights are saved per document and restored when the file is reopened (closes #41)
+- **Highlights Panel** - Lists every highlight with its text, page and colour, searchable and filterable by colour; tapping an entry jumps to it and pulses it
+- **Highlight Navigation** - Next/previous strip that steps through highlights in reading order and wraps at both ends
+- **Search and Highlights** - The in-PDF search bar shows how many of the current matches are already highlighted; tapping that count opens the panel filtered to the same query
+- **Save a Copy with Highlights** - Writes highlights into a new PDF as real annotations so they appear in other PDF readers; the original file is never modified, and the action is confirmed with a checkbox
+- **Highlights Already in a File** - Highlights the PDF itself carries, whether exported from this app or added elsewhere, are now listed, searchable and included in navigation; they are read only, since editing them would mean rewriting the document
+- **Lock Horizontal Scroll** - Setting (View Options) that holds the page where it is when zoomed in, saved per document; available in vertical scroll mode only (closes #74)
+
+### Changed
+- **Selection Menu** - Highlighting is now a single tap from the app's own bar below the selection, rather than being reached through the system menu's overflow; the system menu is unchanged
+
+### Fixed
+- **Viewer Layout** - Hardened the viewer against a latent sidebar offset that could shift the page sideways with nothing visible in the gap
+
+---
+
 ## [2.3.0] - 2026-07-19
 
 ### Added
