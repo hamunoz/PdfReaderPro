@@ -1381,7 +1381,28 @@ function getSelectionInfo() {
 
     if (quads.length === 0) return "";
 
-    return JSON.stringify({ page: pageNumber, text: text, quads: quads });
+    // Where the selection sits within the viewer, in CSS pixels. The app anchors its
+    // own action bar to this, so it needs viewer coordinates rather than the
+    // normalised page coordinates the quads use.
+    const container = document.getElementById("viewerContainer");
+    const containerBounds = container.getBoundingClientRect();
+    let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
+    for (const rect of range.getClientRects()) {
+        if (rect.width <= 0 || rect.height <= 0) continue;
+        left = Math.min(left, rect.left);
+        top = Math.min(top, rect.top);
+        right = Math.max(right, rect.right);
+        bottom = Math.max(bottom, rect.bottom);
+    }
+
+    const anchor = left === Infinity ? null : {
+        x: left - containerBounds.left,
+        y: top - containerBounds.top,
+        w: right - left,
+        h: bottom - top
+    };
+
+    return JSON.stringify({ page: pageNumber, text: text, quads: quads, anchor: anchor });
 }
 
 /** Clears the current selection without disturbing anything else. */
@@ -1539,18 +1560,46 @@ function scrollToHighlight(highlightId) {
  *
  * Hit testing by hand rather than with pointer events, because the layer has to
  * stay `pointer-events: none` for text selection to keep working through it.
+ *
+ * Returns JSON of `{id, x, y, w, h}`, where the rectangle is the union of every
+ * piece of that highlight in viewer coordinates. The app anchors its action bar to
+ * it, the same way it does for a selection, so a multi-line highlight anchors to the
+ * whole thing rather than to whichever line happened to be tapped.
  */
-function highlightIdAtPoint(x, y) {
+function highlightAnchorAtPoint(x, y) {
     const elements = document.querySelectorAll("." + HIGHLIGHT_CLASS);
 
+    let hitId = null;
     for (const element of elements) {
         const bounds = element.getBoundingClientRect();
         if (x >= bounds.left && x <= bounds.right && y >= bounds.top && y <= bounds.bottom) {
-            return element.dataset.highlightId || "";
+            hitId = element.dataset.highlightId || null;
+            break;
         }
     }
+    if (!hitId) return "";
 
-    return "";
+    const container = document.getElementById("viewerContainer");
+    const containerBounds = container.getBoundingClientRect();
+    let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
+
+    for (const element of document.querySelectorAll(
+        `.${HIGHLIGHT_CLASS}[data-highlight-id="${hitId}"]`
+    )) {
+        const b = element.getBoundingClientRect();
+        left = Math.min(left, b.left);
+        top = Math.min(top, b.top);
+        right = Math.max(right, b.right);
+        bottom = Math.max(bottom, b.bottom);
+    }
+
+    return JSON.stringify({
+        id: hitId,
+        x: left - containerBounds.left,
+        y: top - containerBounds.top,
+        w: right - left,
+        h: bottom - top
+    });
 }
 
 // #endregion

@@ -2,6 +2,8 @@ package com.rejowan.pdfreaderpro.presentation.screens.reader
 
 import com.rejowan.pdfreaderpro.data.local.database.entity.BookmarkEntity
 import com.rejowan.pdfreaderpro.domain.model.Highlight
+import com.rejowan.pdfreaderpro.presentation.components.pdf.model.SelectionAnchor
+import com.rejowan.pdfreaderpro.presentation.components.pdf.model.TappedHighlight
 import com.rejowan.pdfreaderpro.presentation.components.pdf.model.TextSelection
 import com.rejowan.pdfreaderpro.presentation.screens.reader.components.AttachmentItem
 import com.rejowan.pdfreaderpro.presentation.screens.reader.components.OutlineItem
@@ -142,6 +144,9 @@ data class ReaderState(
 
     // Set when the picker is editing an existing highlight rather than creating one
     val editingHighlightId: Long? = null,
+
+    /** Where the highlight being edited sits, so its bar anchors to it. */
+    val editingAnchor: SelectionAnchor? = null,
 
     val isHighlightsSheetVisible: Boolean = false,
 
@@ -378,9 +383,11 @@ sealed class ReaderAction {
     data class TextSelectionChanged(val selection: TextSelection?) : ReaderAction()
     /** Opens the colour picker for the current selection. */
     data object StartHighlight : ReaderAction()
+    /** Highlights the current selection straight away, from the selection action bar. */
+    data class HighlightSelection(val color: Int) : ReaderAction()
     /** Creates a highlight from the current selection, or recolours the one being edited. */
     data class ApplyHighlightColor(val color: Int) : ReaderAction()
-    data class HighlightTapped(val highlightId: Long) : ReaderAction()
+    data class HighlightTapped(val highlight: TappedHighlight) : ReaderAction()
     data class DeleteHighlight(val highlightId: Long) : ReaderAction()
     data class SetHighlightLabel(val highlightId: Long, val label: String?) : ReaderAction()
     data object DismissHighlightPicker : ReaderAction()

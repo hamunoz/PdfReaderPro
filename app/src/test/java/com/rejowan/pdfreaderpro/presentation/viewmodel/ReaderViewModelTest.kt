@@ -7,6 +7,7 @@ import app.cash.turbine.test
 import com.rejowan.pdfreaderpro.data.local.PasswordStorage
 import com.rejowan.pdfreaderpro.data.local.database.entity.AnnotationEntity
 import com.rejowan.pdfreaderpro.presentation.components.pdf.model.PdfQuad
+import com.rejowan.pdfreaderpro.presentation.components.pdf.model.TappedHighlight
 import com.rejowan.pdfreaderpro.presentation.components.pdf.model.TextSelection
 import com.rejowan.pdfreaderpro.presentation.screens.reader.HighlightColors
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -642,6 +643,8 @@ class ReaderViewModelTest {
 
     // region Highlights
 
+    private fun tapped(id: Long) = TappedHighlight(id = id, x = 10f, y = 20f, w = 100f, h = 18f)
+
     private fun selection(
         page: Int = 5,
         text: String = "concentration gradient"
@@ -781,7 +784,7 @@ class ReaderViewModelTest {
         viewModel = createViewModel()
         advanceUntilIdle()
 
-        viewModel.onAction(ReaderAction.HighlightTapped(42L))
+        viewModel.onAction(ReaderAction.HighlightTapped(tapped(42L)))
         advanceUntilIdle()
 
         assertTrue(viewModel.state.value.isHighlightPickerVisible)
@@ -806,7 +809,7 @@ class ReaderViewModelTest {
         viewModel = createViewModel()
         advanceUntilIdle()
 
-        viewModel.onAction(ReaderAction.HighlightTapped(42L))
+        viewModel.onAction(ReaderAction.HighlightTapped(tapped(42L)))
         viewModel.onAction(ReaderAction.ApplyHighlightColor(HighlightColors.BLUE))
         advanceUntilIdle()
 
@@ -822,7 +825,7 @@ class ReaderViewModelTest {
         viewModel = createViewModel()
         advanceUntilIdle()
 
-        viewModel.onAction(ReaderAction.HighlightTapped(42L))
+        viewModel.onAction(ReaderAction.HighlightTapped(tapped(42L)))
         viewModel.onAction(ReaderAction.DeleteHighlight(42L))
         advanceUntilIdle()
 

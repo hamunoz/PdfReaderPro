@@ -166,12 +166,12 @@ function doOnLast() {
             const y = e.clientY - rect.top;
             // Hit-test in client coordinates, which is what getBoundingClientRect
             // reports, not the container-relative x/y sent to onSingleClick.
-            const highlightId = highlightIdAtPoint(e.clientX, e.clientY);
+            const highlightHit = highlightAnchorAtPoint(e.clientX, e.clientY);
             singleClickTimer = setTimeout(() => {
                 if (e.target.tagName === "A") JWI.onLinkClick(e.target.href);
                 // Tapping a highlight is the more specific intent, so it takes
                 // priority over the toolbar toggle that onSingleClick drives.
-                else if (highlightId) JWI.onHighlightTapped(highlightId);
+                else if (highlightHit) JWI.onHighlightTapped(highlightHit);
                 else JWI.onSingleClick(x, y, rect.width, rect.height);
             }, DOUBLE_CLICK_THRESHOLD);
         }

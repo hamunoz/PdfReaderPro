@@ -157,6 +157,25 @@ class ReaderViewModel(
     }
 
     /**
+     * Closes the highlight bar when the page moves under it.
+     *
+     * Only closes an edit bar. A bar opened for a live selection is left alone,
+     * since the selection itself survives and the system moves its handles with it.
+     */
+    private fun dismissHighlightBarOnViewChange() {
+        if (!_state.value.isHighlightPickerVisible) return
+        if (_state.value.editingHighlightId == null) return
+
+        _state.update {
+            it.copy(
+                isHighlightPickerVisible = false,
+                editingHighlightId = null,
+                editingAnchor = null
+            )
+        }
+    }
+
+    /**
      * Pushes the horizontal lock to the viewer.
      *
      * A no-op until the viewer is attached, so [setPdfViewer] applies it again once
@@ -221,6 +240,7 @@ class ReaderViewModel(
                 it.copy(
                     isHighlightPickerVisible = false,
                     editingHighlightId = null,
+                    editingAnchor = null,
                     capturedSelection = null,
                     pendingSelection = null
                 )
@@ -421,12 +441,18 @@ class ReaderViewModel(
             },
             onScaleChange = { scale ->
                 _state.update { it.copy(zoom = scale) }
+                dismissHighlightBarOnViewChange()
+            },
+            onScrollChange = { _, _, _ ->
+                // The bar is anchored to a position in the viewer, so once the page
+                // moves underneath it, it is pointing at nothing.
+                dismissHighlightBarOnViewChange()
             },
             onTextSelectionChange = { selection ->
                 onAction(ReaderAction.TextSelectionChanged(selection))
             },
-            onHighlightTapped = { highlightId ->
-                onAction(ReaderAction.HighlightTapped(highlightId))
+            onHighlightTapped = { highlight ->
+                onAction(ReaderAction.HighlightTapped(highlight))
             },
             onPasswordDialogChange = { isOpen ->
                 when {
@@ -628,7 +654,23 @@ class ReaderViewModel(
             is ReaderAction.PreviousPage -> {
                 pdfViewer?.goToPreviousPage()
             }
-            is ReaderAction.TapToTurnOrToggle -> handleTapToTurnOrToggle(action)
+            is ReaderAction.TapToTurnOrToggle -> {
+                // A tap elsewhere dismisses the highlight bar rather than falling
+                // through to the toolbar toggle, which is what a floating bar
+                // anchored to the page should do.
+                if (_state.value.isHighlightPickerVisible) {
+                    _state.update {
+                        it.copy(
+                            isHighlightPickerVisible = false,
+                            editingHighlightId = null,
+                            editingAnchor = null,
+                            capturedSelection = null
+                        )
+                    }
+                } else {
+                    handleTapToTurnOrToggle(action)
+                }
+            }
 
             is ReaderAction.SetZoom -> {
                 _state.update { it.copy(zoom = action.zoom.coerceIn(it.minZoom, it.maxZoom)) }
@@ -899,9 +941,21 @@ class ReaderViewModel(
 
             is ReaderAction.ApplyHighlightColor -> applyHighlightColor(action.color)
 
+            // From the selection action bar, which shows the colours inline, so there
+            // is no separate picker step to capture the selection first.
+            is ReaderAction.HighlightSelection -> {
+                val selection = _state.value.pendingSelection ?: return
+                _state.update { it.copy(capturedSelection = selection, editingHighlightId = null) }
+                applyHighlightColor(action.color)
+            }
+
             is ReaderAction.HighlightTapped -> {
                 _state.update {
-                    it.copy(isHighlightPickerVisible = true, editingHighlightId = action.highlightId)
+                    it.copy(
+                        isHighlightPickerVisible = true,
+                        editingHighlightId = action.highlight.id,
+                        editingAnchor = action.highlight.anchor
+                    )
                 }
             }
 
@@ -909,7 +963,11 @@ class ReaderViewModel(
                 viewModelScope.launch {
                     annotationDao.deleteById(action.highlightId)
                     _state.update {
-                        it.copy(isHighlightPickerVisible = false, editingHighlightId = null)
+                        it.copy(
+                            isHighlightPickerVisible = false,
+                            editingHighlightId = null,
+                            editingAnchor = null
+                        )
                     }
                 }
             }
@@ -931,6 +989,7 @@ class ReaderViewModel(
                     it.copy(
                         isHighlightPickerVisible = false,
                         editingHighlightId = null,
+                        editingAnchor = null,
                         capturedSelection = null
                     )
                 }

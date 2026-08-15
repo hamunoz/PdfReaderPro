@@ -11,6 +11,7 @@ import com.rejowan.pdfreaderpro.presentation.components.pdf.PdfViewer.PageSpread
 import com.rejowan.pdfreaderpro.presentation.components.pdf.js.getBoolean
 import com.rejowan.pdfreaderpro.presentation.components.pdf.js.toJsHex
 import com.rejowan.pdfreaderpro.presentation.components.pdf.model.SideBarTreeItem
+import com.rejowan.pdfreaderpro.presentation.components.pdf.model.TappedHighlight
 import com.rejowan.pdfreaderpro.presentation.components.pdf.model.TextSelection
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
@@ -213,10 +214,18 @@ internal class WebInterface(private val pdfViewer: PdfViewer) {
         pdfViewer.listeners.forEach { it.onTextSelectionChange(selection) }
     }
 
+    /** @param payload A [TappedHighlight] as JSON, or "" when nothing was hit. */
     @JavascriptInterface
-    fun onHighlightTapped(highlightId: String) = post {
-        val id = highlightId.toLongOrNull() ?: return@post
-        pdfViewer.listeners.forEach { it.onHighlightTapped(id) }
+    fun onHighlightTapped(payload: String) = post {
+        val tapped = try {
+            Json.decodeFromString<TappedHighlight>(payload)
+        } catch (e: SerializationException) {
+            null
+        } catch (e: IllegalArgumentException) {
+            null
+        } ?: return@post
+
+        pdfViewer.listeners.forEach { it.onHighlightTapped(tapped) }
     }
 
     /**

@@ -24,11 +24,38 @@ data class PdfQuad(
  * [quads] holds one rectangle per line, since a selection running over several
  * lines would otherwise need a bounding box that also covers the gaps between them.
  */
+/**
+ * Where a selection sits within the viewer, in CSS pixels relative to its top-left.
+ *
+ * Viewer coordinates rather than the normalised page coordinates [PdfQuad] uses,
+ * because this exists to anchor app UI over the viewer, not to survive zoom.
+ */
+@Serializable
+data class SelectionAnchor(
+    val x: Float,
+    val y: Float,
+    val w: Float,
+    val h: Float
+)
+
+/** A tapped highlight and where it sits, so app UI can anchor to it. */
+@Serializable
+data class TappedHighlight(
+    val id: Long,
+    val x: Float,
+    val y: Float,
+    val w: Float,
+    val h: Float
+) {
+    val anchor: SelectionAnchor get() = SelectionAnchor(x, y, w, h)
+}
+
 @Serializable
 data class TextSelection(
     @SerialName("page") val pageNumber: Int,
     val text: String,
-    val quads: List<PdfQuad>
+    val quads: List<PdfQuad>,
+    val anchor: SelectionAnchor? = null
 )
 
 /**

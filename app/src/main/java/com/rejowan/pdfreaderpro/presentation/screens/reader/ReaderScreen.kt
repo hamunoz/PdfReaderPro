@@ -54,7 +54,6 @@ import com.rejowan.pdfreaderpro.R
 import com.rejowan.pdfreaderpro.presentation.components.pdf.PdfViewer
 import com.rejowan.pdfreaderpro.presentation.components.pdf.print.DefaultPdfPrintAdapter
 import com.rejowan.pdfreaderpro.presentation.screens.reader.components.BakeHighlightsDialog
-import com.rejowan.pdfreaderpro.presentation.screens.reader.components.HighlightColorPicker
 import com.rejowan.pdfreaderpro.presentation.screens.reader.components.HighlightNavBar
 import com.rejowan.pdfreaderpro.presentation.screens.reader.components.HighlightsSheet
 import com.rejowan.pdfreaderpro.presentation.screens.reader.components.DeleteConfirmDialog
@@ -78,6 +77,7 @@ import com.rejowan.pdfreaderpro.presentation.screens.reader.components.AutoScrol
 import com.rejowan.pdfreaderpro.presentation.screens.reader.components.AutoScrollOverlay
 import com.rejowan.pdfreaderpro.presentation.screens.reader.components.TopBarMenuPanel
 import com.rejowan.pdfreaderpro.presentation.screens.reader.components.RemoveFavoriteSheet
+import com.rejowan.pdfreaderpro.presentation.screens.reader.components.SelectionActionBar
 import org.koin.androidx.compose.koinViewModel
 
 @Composable
@@ -457,6 +457,28 @@ fun ReaderScreen(
                     }
                 )
 
+                // The app's own selection actions, anchored under the selection. The
+                // system menu keeps Copy and friends above it.
+                val isEditingHighlight = state.isHighlightPickerVisible && state.editingHighlightId != null
+                SelectionActionBar(
+                    isVisible = isEditingHighlight || state.pendingSelection != null,
+                    anchor = if (isEditingHighlight) state.editingAnchor else state.pendingSelection?.anchor,
+                    viewerWidthDp = configuration.screenWidthDp.toFloat(),
+                    viewerHeightDp = configuration.screenHeightDp.toFloat(),
+                    onHighlight = { color ->
+                        if (isEditingHighlight) {
+                            viewModel.onAction(ReaderAction.ApplyHighlightColor(color))
+                        } else {
+                            viewModel.onAction(ReaderAction.HighlightSelection(color))
+                        }
+                    },
+                    selectedColor = state.editingHighlight?.color,
+                    onDelete = state.editingHighlightId?.let { id ->
+                        { viewModel.onAction(ReaderAction.DeleteHighlight(id)) }
+                    },
+                    modifier = Modifier.align(Alignment.TopStart)
+                )
+
                 // Highlight navigation strip, sits at the top so it does not collide
                 // with the colour picker or the control bar at the bottom.
                 HighlightNavBar(
@@ -469,23 +491,6 @@ fun ReaderScreen(
                         .align(Alignment.TopCenter)
                         .windowInsetsPadding(WindowInsets.statusBars)
                         .padding(top = if (state.isToolbarVisible && !state.isFullScreen) 72.dp else 16.dp)
-                )
-
-                // Highlight colour picker, sits above the control bar so it does not
-                // cover it while the user is choosing.
-                HighlightColorPicker(
-                    isVisible = state.isHighlightPickerVisible,
-                    selectedColor = state.editingHighlight?.color,
-                    onColorSelected = { color ->
-                        viewModel.onAction(ReaderAction.ApplyHighlightColor(color))
-                    },
-                    onDelete = state.editingHighlightId?.let { id ->
-                        { viewModel.onAction(ReaderAction.DeleteHighlight(id)) }
-                    },
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .windowInsetsPadding(WindowInsets.navigationBars)
-                        .padding(bottom = if (state.isToolbarVisible && !state.isFullScreen) 96.dp else 24.dp)
                 )
 
                 // Floating control bar at bottom

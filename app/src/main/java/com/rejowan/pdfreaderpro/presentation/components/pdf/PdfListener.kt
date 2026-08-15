@@ -8,6 +8,7 @@ import androidx.annotation.ColorInt
 import androidx.annotation.FloatRange
 import androidx.annotation.IntRange
 import com.rejowan.pdfreaderpro.presentation.components.pdf.model.SideBarTreeItem
+import com.rejowan.pdfreaderpro.presentation.components.pdf.model.TappedHighlight
 import com.rejowan.pdfreaderpro.presentation.components.pdf.model.TextSelection
 
 /**
@@ -372,8 +373,8 @@ interface PdfListener {
 
     /**
      * Called when the user taps a rendered highlight.
-     * @param highlightId The id of the tapped highlight.
+     * @param highlight The tapped highlight and its bounds in the viewer.
      */
-    fun onHighlightTapped(highlightId: Long) {}
+    fun onHighlightTapped(highlight: TappedHighlight) {}
 
 }
