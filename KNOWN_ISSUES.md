@@ -35,11 +35,22 @@ This document lists known issues and limitations in PDF Reader Pro, along with w
 ---
 
 ### Search or copy returns wrong text in some non-English PDFs
-**Issue:** In some PDFs (often Indic scripts such as Hindi, Bengali, or Gujarati) the text renders correctly, but search, text selection, and copy return incorrect or scrambled characters. This happens when the PDF's embedded fonts carry an incomplete or incorrect `/ToUnicode` map — the correct characters are simply not stored in the file, so no reader can recover them.
+**Issue:** In some PDFs (often Indic scripts such as Hindi, Bengali, or Gujarati) the text renders correctly, but search, text selection, copy, and highlighting return incorrect or scrambled characters. Highlights are affected because they are made from a text selection, so a highlight may cover the right words on the page while listing the wrong text in the Highlights panel. This happens when the PDF's embedded fonts carry an incomplete or incorrect `/ToUnicode` map — the correct characters are simply not stored in the file, so no reader can recover them.
 
 **Workaround:** Re-generate the PDF with a tool that embeds proper Unicode data (for example, "Print → Save as PDF" from Chrome). Note this affects every PDF viewer (including Adobe Reader and Chrome), not just this app.
 
 **Status:** Limitation of the PDF file itself, not fixable in the reader (#40)
+
+---
+
+## Highlights
+
+### Highlights already in a file may list slightly more or less text than they cover
+**Issue:** Highlights that came with the PDF, whether exported from this app or added by another application, record where they are on the page but not which words they cover. The text shown for them in the Highlights panel is recovered by reading the page underneath, and the PDF text layer gives one run per line rather than per word, so the recovered text is estimated from where the highlight falls along the line. On unusual fonts or heavy kerning this can clip a word short or include a neighbouring one.
+
+**Workaround:** None needed for reading; the highlight itself is drawn in exactly the right place. Only the text listed in the panel, and therefore what it matches in search, is approximate.
+
+**Status:** Limitation of the data available from the PDF text layer. Highlights created in this app are unaffected, since their text is captured from the selection.
 
 ---
 

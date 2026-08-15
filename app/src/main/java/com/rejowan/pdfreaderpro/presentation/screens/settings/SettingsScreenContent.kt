@@ -1888,9 +1888,26 @@ private fun ChangelogContent() {
                 .verticalScroll(rememberScrollState())
         ) {
             ChangelogVersionItem(
+                version = "2.4.0",
+                date = "August 2026",
+                isLatest = true,
+                changes = listOf(
+                    "Highlight text in five colours, saved per document",
+                    "Highlights panel with search, colour filter and jump-to-highlight",
+                    "Next/previous navigation between highlights",
+                    "In-PDF search shows how many matches are already highlighted",
+                    "Save a copy with highlights written into the PDF",
+                    "Highlights already in a file are listed and searchable, read only",
+                    "Lock horizontal scroll when zoomed in, saved per document"
+                )
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            ChangelogVersionItem(
                 version = "2.3.0",
                 date = "July 2026",
-                isLatest = true,
+                isLatest = false,
                 changes = listOf(
                     "Setting to hide the page slider that appears while scrolling",
                     "In-PDF search now steps through every match across all pages",

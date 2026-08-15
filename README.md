@@ -222,6 +222,16 @@ GNU General Public License for more details.
 
 ## Changelog
 
+### v2.4.0 (2026-08-15)
+
+- Highlight text in five colours, saved per document (#41)
+- Highlights panel with search, colour filter and jump-to-highlight (#41)
+- Next/previous navigation between highlights (#41)
+- In-PDF search shows how many matches are already highlighted (#41)
+- Save a copy with highlights written into the PDF as real annotations (#41)
+- Highlights already present in a file are listed and searchable, read only (#41)
+- Lock horizontal scroll when zoomed in, saved per document (#74)
+
 ### v2.3.0 (2026-07-19)
 
 - Setting to hide the page slider that appears while scrolling (#54)
