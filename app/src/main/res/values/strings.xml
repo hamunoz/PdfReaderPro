@@ -272,6 +272,7 @@
     <string name="highlight_count">%d highlight</string>
     <string name="highlights_count">%d highlights</string>
     <string name="view_manage_highlights">View and manage highlights</string>
+    <string name="highlight_in_file">Saved in the file</string>
     <string name="search_highlights">Search highlights</string>
     <string name="save_with_highlights">Save a copy with highlights</string>
     <string name="save_with_highlights_desc">Write highlights into a new PDF file</string>

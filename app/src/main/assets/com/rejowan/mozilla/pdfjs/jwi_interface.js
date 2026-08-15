@@ -40,5 +40,6 @@ try {
         onAttachmentsLoaded() { },
         onTextSelected() { },
         onHighlightTapped() { },
+        onDocumentHighlightsLoaded() { },
     };
 }

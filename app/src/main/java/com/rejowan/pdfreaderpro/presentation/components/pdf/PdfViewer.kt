@@ -1760,6 +1760,16 @@ class PdfViewer @JvmOverloads constructor(
     }
 
     /**
+     * Reads the Highlight annotations the open document already carries.
+     *
+     * Results arrive on [PdfListener.onDocumentHighlightsLoaded]. Worth calling once
+     * per document, after it has loaded.
+     */
+    fun loadDocumentHighlights() {
+        webView callDirectly "loadDocumentHighlights"()
+    }
+
+    /**
      * Freezes horizontal panning at the page's current horizontal position.
      *
      * Deliberately holds wherever the reader has panned to rather than re-centring,

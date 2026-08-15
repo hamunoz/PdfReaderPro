@@ -18,8 +18,21 @@ data class HighlightQuad(
     val h: Float
 )
 
+/** Where a highlight came from, which decides whether it can be edited. */
+enum class HighlightSource {
+    /** Created in this app and stored in its database. Fully editable. */
+    APP,
+
+    /**
+     * Already present in the PDF file, either baked by us earlier or added by
+     * another application. Listed, navigable and searchable, but read only, since
+     * editing it would mean rewriting the user's document.
+     */
+    DOCUMENT
+}
+
 /**
- * A persisted text highlight.
+ * A text highlight.
  *
  * A selection spanning more than one line produces one quad per line, which is why
  * [quads] is a list rather than a single rectangle.
@@ -34,9 +47,13 @@ data class Highlight(
     val label: String? = null,
     val note: String? = null,
     val sortIndex: Int = 0,
+    val source: HighlightSource = HighlightSource.APP,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 ) {
+    /** Only highlights the app owns can be recoloured or deleted. */
+    val isEditable: Boolean get() = source == HighlightSource.APP
+
     /** Single-line preview for the highlights panel, where rows are one line tall. */
     val preview: String
         get() = text.replace(WHITESPACE_RUN, " ").trim()

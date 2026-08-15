@@ -1700,3 +1700,160 @@ function setupHighlightRendering() {
     eventBus.on("rotationchanging", () => setTimeout(refreshRenderedHighlights, 0));
 }
 // #endregion
+
+// #region highlights already in the document (#41)
+
+/**
+ * Reads the Highlight annotations the PDF itself carries.
+ *
+ * These belong to the file rather than the app, so they are surfaced read only:
+ * listed, navigable and searchable, but not editable. PDF.js already paints them
+ * through its annotation layer, so they are deliberately not added to our overlay,
+ * which would draw them a second time.
+ *
+ * Quads come back as a flat Float32Array, eight numbers per quad in the order
+ * upper-left, upper-right, lower-left, lower-right, in PDF user space. They are
+ * converted to the same normalised, top-left form the app stores its own in.
+ */
+async function loadDocumentHighlights() {
+    const document_ = PDFViewerApplication.pdfDocument;
+    if (!document_) {
+        JWI.onDocumentHighlightsLoaded(JSON.stringify([]));
+        return;
+    }
+
+    const results = [];
+
+    try {
+        for (let pageNumber = 1; pageNumber <= document_.numPages; pageNumber++) {
+            const page = await document_.getPage(pageNumber);
+            const annotations = await page.getAnnotations();
+            const highlights = annotations.filter((a) => a.subtype === "Highlight");
+            if (highlights.length === 0) continue;
+
+            const view = page.view;
+            const pageWidth = view[2] - view[0];
+            const pageHeight = view[3] - view[1];
+            if (pageWidth <= 0 || pageHeight <= 0) continue;
+
+            const textContent = await page.getTextContent();
+
+            highlights.forEach((annotation, index) => {
+                const points = annotation.quadPoints;
+                if (!points || points.length < 8) return;
+
+                const quads = [];
+                const boxes = [];
+                for (let i = 0; i + 7 < points.length; i += 8) {
+                    const left = points[i];
+                    const top = points[i + 1];
+                    const right = points[i + 2];
+                    const bottom = points[i + 5];
+                    if (right <= left || top <= bottom) continue;
+
+                    boxes.push({ left, right, top, bottom });
+                    quads.push({
+                        x: (left - view[0]) / pageWidth,
+                        y: (view[3] - top) / pageHeight,
+                        w: (right - left) / pageWidth,
+                        h: (top - bottom) / pageHeight
+                    });
+                }
+                if (quads.length === 0) return;
+
+                results.push({
+                    // Stable within a document, and distinct from the app's own
+                    // database ids, which are positive.
+                    id: -(pageNumber * 1000 + index + 1),
+                    page: pageNumber,
+                    color: rgbArrayToArgb(annotation.color),
+                    text: textUnderBoxes(textContent, boxes),
+                    note: (annotation.contentsObj && annotation.contentsObj.str) || "",
+                    label: (annotation.titleObj && annotation.titleObj.str) || "",
+                    quads: quads
+                });
+            });
+        }
+    } catch (e) {
+        console.error("Error reading document highlights:", e);
+    }
+
+    JWI.onDocumentHighlightsLoaded(JSON.stringify(results));
+}
+
+/** Packs pdf.js's [r, g, b] into the ARGB int the app stores colours as. */
+function rgbArrayToArgb(color) {
+    if (!color || color.length < 3) return -1;
+    return (0xff << 24 | color[0] << 16 | color[1] << 8 | color[2]) | 0;
+}
+
+/**
+ * Recovers the text sitting under a highlight.
+ *
+ * The annotation records where it is, not what it covers, so the words have to be
+ * read back off the page. Without them the panel would list blank rows and search
+ * would never match a highlight that came with the file.
+ */
+function textUnderBoxes(textContent, boxes) {
+    const parts = [];
+
+    for (const item of textContent.items) {
+        if (!item.str || !item.transform) continue;
+
+        const left = item.transform[4];
+        const width = item.width || 0;
+        const right = left + width;
+        const baseline = item.transform[5];
+        const middle = baseline + (item.height || 0) / 2;
+
+        for (const box of boxes) {
+            const withinY = middle <= box.top && middle >= box.bottom;
+            if (!withinY) continue;
+
+            const overlapLeft = Math.max(left, box.left);
+            const overlapRight = Math.min(right, box.right);
+            if (overlapRight <= overlapLeft) continue;
+
+            parts.push(sliceByOverlap(item.str, left, width, overlapLeft, overlapRight));
+            break;
+        }
+    }
+
+    return parts.join(" ").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Takes the part of a text run that a highlight actually covers.
+ *
+ * pdf.js hands back one item per text-showing operator, which is usually a whole
+ * line, so a highlight over a single word would otherwise report the entire line.
+ * Character positions are not available, so each word's position is estimated from
+ * how far along the run it starts, and a word is kept when its midpoint falls inside
+ * the highlight.
+ *
+ * Testing the midpoint rather than snapping the edges outwards matters: snapping
+ * outwards turned a highlight on one word into that word plus its neighbours,
+ * because an estimate landing slightly early swallowed the whole preceding word.
+ * Still an estimate for proportional fonts, but wrong by a fraction of a word
+ * rather than a whole one.
+ */
+function sliceByOverlap(text, left, width, overlapLeft, overlapRight) {
+    if (width <= 0 || text.length === 0) return text;
+    if (overlapLeft <= left && overlapRight >= left + width) return text;
+
+    const perCharacter = width / text.length;
+    const kept = [];
+    const word = /\S+/g;
+
+    let match;
+    while ((match = word.exec(text)) !== null) {
+        const wordLeft = left + match.index * perCharacter;
+        const wordRight = left + (match.index + match[0].length) * perCharacter;
+        const middle = (wordLeft + wordRight) / 2;
+
+        if (middle >= overlapLeft && middle <= overlapRight) kept.push(match[0]);
+    }
+
+    return kept.length > 0 ? kept.join(" ") : text;
+}
+// #endregion

@@ -686,7 +686,7 @@ fun ReaderScreen(
     // Highlights Sheet
     if (state.isHighlightsSheetVisible) {
         HighlightsSheet(
-            highlights = state.highlights,
+            highlights = state.allHighlights,
             currentPage = state.currentPage,
             onHighlightClick = { highlight ->
                 viewModel.onAction(ReaderAction.GoToHighlight(highlight.id))

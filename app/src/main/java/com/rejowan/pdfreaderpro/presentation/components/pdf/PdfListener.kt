@@ -8,6 +8,7 @@ import androidx.annotation.ColorInt
 import androidx.annotation.FloatRange
 import androidx.annotation.IntRange
 import com.rejowan.pdfreaderpro.presentation.components.pdf.model.SideBarTreeItem
+import com.rejowan.pdfreaderpro.presentation.components.pdf.model.DocumentHighlight
 import com.rejowan.pdfreaderpro.presentation.components.pdf.model.TappedHighlight
 import com.rejowan.pdfreaderpro.presentation.components.pdf.model.TextSelection
 
@@ -370,6 +371,12 @@ interface PdfListener {
      * selection handle drag.
      */
     fun onTextSelectionChange(selection: TextSelection?) {}
+
+    /**
+     * Called once a document's own Highlight annotations have been read.
+     * @param highlights Highlights belonging to the file, not to the app.
+     */
+    fun onDocumentHighlightsLoaded(highlights: List<DocumentHighlight>) {}
 
     /**
      * Called when the user taps a rendered highlight.

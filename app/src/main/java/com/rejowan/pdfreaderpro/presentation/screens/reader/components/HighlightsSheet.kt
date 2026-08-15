@@ -35,6 +35,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.FormatColorFill
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -447,6 +448,14 @@ private fun HighlightItem(
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                     )
 
+                    if (!highlight.isEditable) {
+                        Text(
+                            text = " · " + stringResource(R.string.highlight_in_file),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        )
+                    }
+
                     highlight.label?.let { label ->
                         Text(
                             text = " · $label",
@@ -459,12 +468,24 @@ private fun HighlightItem(
                 }
             }
 
-            IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
+            if (highlight.isEditable) {
+                IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
+                    Icon(
+                        imageVector = Icons.Rounded.Delete,
+                        contentDescription = stringResource(R.string.delete_highlight),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            } else {
+                // Belongs to the file, so there is nothing here to delete.
                 Icon(
-                    imageVector = Icons.Rounded.Delete,
-                    contentDescription = stringResource(R.string.delete_highlight),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f),
-                    modifier = Modifier.size(16.dp)
+                    imageVector = Icons.Rounded.Lock,
+                    contentDescription = stringResource(R.string.highlight_in_file),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                    modifier = Modifier
+                        .size(32.dp)
+                        .padding(8.dp)
                 )
             }
         }

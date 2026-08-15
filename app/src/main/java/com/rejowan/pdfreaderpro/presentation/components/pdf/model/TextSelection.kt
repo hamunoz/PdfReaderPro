@@ -38,6 +38,23 @@ data class SelectionAnchor(
     val h: Float
 )
 
+/**
+ * A Highlight annotation the PDF file already carries.
+ *
+ * @param id Negative, to stay clear of the app's own positive database ids.
+ * @param color ARGB, or -1 when the annotation records no colour.
+ */
+@Serializable
+data class DocumentHighlight(
+    val id: Long,
+    @SerialName("page") val pageNumber: Int,
+    val color: Int,
+    val text: String = "",
+    val note: String = "",
+    val label: String = "",
+    val quads: List<PdfQuad> = emptyList()
+)
+
 /** A tapped highlight and where it sits, so app UI can anchor to it. */
 @Serializable
 data class TappedHighlight(

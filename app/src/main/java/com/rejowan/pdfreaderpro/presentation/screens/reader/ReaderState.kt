@@ -124,8 +124,14 @@ data class ReaderState(
     // Remove favourite confirmation
     val isRemoveFavoriteDialogVisible: Boolean = false,
 
-    // Highlights for the current PDF, in reading order
+    // Highlights the app owns, from its database, in reading order
     val highlights: List<Highlight> = emptyList(),
+
+    /**
+     * Highlights the PDF file itself carries, read only. Either baked by us earlier
+     * or added by another application.
+     */
+    val documentHighlights: List<Highlight> = emptyList(),
 
     // The live text selection, non-null while the user has text selected
     val pendingSelection: TextSelection? = null,
@@ -190,9 +196,17 @@ data class ReaderState(
     val canLockHorizontalScroll: Boolean
         get() = scrollMode == ScrollMode.VERTICAL
 
+    /**
+     * Everything the panel, navigation and search work from: the app's own
+     * highlights and the document's own, in one reading order.
+     */
+    val allHighlights: List<Highlight>
+        get() = (highlights + documentHighlights)
+            .sortedWith(compareBy({ it.pageNumber }, { it.sortIndex }, { it.createdAt }))
+
     /** 1-based position for the navigation strip, e.g. "3 / 12". */
     val highlightPositionLabel: String
-        get() = "${currentHighlightIndex + 1} / ${highlights.size}"
+        get() = "${currentHighlightIndex + 1} / ${allHighlights.size}"
 
     /**
      * Highlights whose text matches the current search.
@@ -206,7 +220,7 @@ data class ReaderState(
         get() = if (searchQuery.isBlank()) {
             emptyList()
         } else {
-            highlights.filter { it.text.contains(searchQuery, ignoreCase = true) }
+            allHighlights.filter { it.text.contains(searchQuery, ignoreCase = true) }
         }
 }
 

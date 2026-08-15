@@ -131,9 +131,10 @@ class ReaderViewModel(
                         highlights = highlights,
                         // Deleting a highlight shrinks the list under the navigation
                         // strip, so keep the index inside it.
-                        currentHighlightIndex =
-                            state.currentHighlightIndex.coerceAtMost(highlights.lastIndex),
-                        isHighlightNavVisible = state.isHighlightNavVisible && highlights.isNotEmpty()
+                        currentHighlightIndex = state.currentHighlightIndex
+                            .coerceAtMost(highlights.size + state.documentHighlights.size - 1),
+                        isHighlightNavVisible = state.isHighlightNavVisible &&
+                            (highlights.isNotEmpty() || state.documentHighlights.isNotEmpty())
                     )
                 }
                 renderHighlights(highlights)
@@ -250,7 +251,7 @@ class ReaderViewModel(
 
     /** Jumps to a highlight's page, then pulses it once the page has rendered. */
     private fun goToHighlight(highlightId: Long) {
-        val highlights = _state.value.highlights
+        val highlights = _state.value.allHighlights
         val index = highlights.indexOfFirst { it.id == highlightId }
         if (index < 0) return
 
@@ -272,7 +273,7 @@ class ReaderViewModel(
      * page then sortIndex, so this and the panel can never disagree.
      */
     private fun stepHighlight(forward: Boolean) {
-        val highlights = _state.value.highlights
+        val highlights = _state.value.allHighlights
         if (highlights.isEmpty()) return
 
         val current = _state.value.currentHighlightIndex
@@ -292,6 +293,11 @@ class ReaderViewModel(
 
         // Viewer pages are 1-based.
         viewer.goToPage(highlight.pageNumber + 1)
+
+        // The document's own highlights are painted by the viewer's annotation
+        // layer, not by our overlay, so there is no element of ours to pulse. The
+        // page jump still lands the reader on them.
+        if (!highlight.isEditable) return
 
         viewModelScope.launch {
             // scrollToHighlight only finds an element on a rendered page, and goToPage
@@ -384,6 +390,8 @@ class ReaderViewModel(
                 // anything sent earlier landed on an empty viewer and was lost.
                 renderHighlights(_state.value.highlights)
                 applyHorizontalScrollLock(_state.value.lockHorizontalScroll)
+                // The file's own highlights only become readable once it is open.
+                viewer.loadDocumentHighlights()
 
                 // Determine which page to start on
                 val lastPage = storedLastPage // Capture for smart cast
@@ -447,6 +455,17 @@ class ReaderViewModel(
                 // The bar is anchored to a position in the viewer, so once the page
                 // moves underneath it, it is pointing at nothing.
                 dismissHighlightBarOnViewChange()
+            },
+            onDocumentHighlightsLoaded = { loaded ->
+                _state.update { state ->
+                    state.copy(
+                        documentHighlights = loaded.map { it.toHighlight(pdfPath) },
+                        // The merged list just grew or shrank, so keep the strip's
+                        // index inside it.
+                        currentHighlightIndex = state.currentHighlightIndex
+                            .coerceAtMost(state.highlights.size + loaded.size - 1)
+                    )
+                }
             },
             onTextSelectionChange = { selection ->
                 onAction(ReaderAction.TextSelectionChanged(selection))

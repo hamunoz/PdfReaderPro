@@ -2,7 +2,9 @@ package com.rejowan.pdfreaderpro.data.mapper
 
 import com.rejowan.pdfreaderpro.data.local.database.entity.AnnotationEntity
 import com.rejowan.pdfreaderpro.domain.model.Highlight
+import com.rejowan.pdfreaderpro.domain.model.HighlightSource
 import com.rejowan.pdfreaderpro.domain.model.HighlightQuad
+import com.rejowan.pdfreaderpro.presentation.components.pdf.model.DocumentHighlight
 import com.rejowan.pdfreaderpro.presentation.components.pdf.model.PdfQuad
 import com.rejowan.pdfreaderpro.presentation.components.pdf.model.RenderedHighlight
 import kotlinx.serialization.SerializationException
@@ -63,6 +65,25 @@ fun Highlight.toEntity(): AnnotationEntity = AnnotationEntity(
     sortIndex = sortIndex,
     createdAt = createdAt,
     updatedAt = updatedAt
+)
+
+/**
+ * Converts a highlight the PDF file carries into the shared domain model.
+ *
+ * Marked [HighlightSource.DOCUMENT], so the panel lists it without edit controls and
+ * nothing tries to write it back. Pages arrive 1-based from the viewer and are held
+ * 0-based, matching the app's own.
+ */
+fun DocumentHighlight.toHighlight(pdfPath: String): Highlight = Highlight(
+    id = id,
+    pdfPath = pdfPath,
+    pageNumber = pageNumber - 1,
+    text = text,
+    quads = quads.map { HighlightQuad(it.x, it.y, it.w, it.h) },
+    color = if (color == -1) DEFAULT_HIGHLIGHT_COLOR else color,
+    label = label.takeIf { it.isNotBlank() },
+    note = note.takeIf { it.isNotBlank() },
+    source = HighlightSource.DOCUMENT
 )
 
 /**
