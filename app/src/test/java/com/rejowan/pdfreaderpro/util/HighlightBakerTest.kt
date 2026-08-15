@@ -9,6 +9,7 @@ import com.itextpdf.kernel.pdf.annot.PdfTextMarkupAnnotation
 import com.rejowan.pdfreaderpro.domain.model.Highlight
 import com.rejowan.pdfreaderpro.domain.model.HighlightQuad
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -181,10 +182,44 @@ class HighlightBakerTest {
         }
     }
 
+    /**
+     * /Contents is the note attached to the markup, not a copy of the marked text.
+     * Writing the highlighted text here made readers pop up a box repeating the words
+     * already visible under the highlight.
+     */
     @Test
-    fun `the highlighted text is carried into the annotation contents`() {
+    fun `the highlighted text is not copied into the annotation contents`() {
         bakeAndRead(sourcePdf(), listOf(highlight(text = "osmotic pressure"))).use { doc ->
-            assertEquals("osmotic pressure", doc.getPage(1).annotations.single().contents.toUnicodeString())
+            assertNull(doc.getPage(1).annotations.single().contents)
+        }
+    }
+
+    @Test
+    fun `a note becomes the annotation contents`() {
+        val withNote = highlight().copy(note = "revisit before the exam")
+        bakeAndRead(sourcePdf(), listOf(withNote)).use { doc ->
+            assertEquals(
+                "revisit before the exam",
+                doc.getPage(1).annotations.single().contents.toUnicodeString()
+            )
+        }
+    }
+
+    @Test
+    fun `a blank note is left off rather than written as empty`() {
+        val blankNote = highlight().copy(note = "   ")
+        bakeAndRead(sourcePdf(), listOf(blankNote)).use { doc ->
+            assertNull(doc.getPage(1).annotations.single().contents)
+        }
+    }
+
+    /** No note and no label means no popup in any reader. */
+    @Test
+    fun `a plain highlight carries neither contents nor title`() {
+        bakeAndRead(sourcePdf(), listOf(highlight())).use { doc ->
+            val annotation = doc.getPage(1).annotations.single()
+            assertNull(annotation.contents)
+            assertNull(annotation.title)
         }
     }
 

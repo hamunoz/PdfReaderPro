@@ -99,6 +99,15 @@
     }
 }
 
+/* Popups for annotations that carry a real note. PDF.js positions these off the
+   annotation with no regard for the viewport, so on a phone they run off the right
+   edge. Cap the width and let long notes wrap instead of overflowing. */
+.annotationLayer .popupAnnotation,
+.annotationLayer .popup {
+    max-width: min(260px, 70vw);
+    overflow-wrap: break-word;
+}
+
 #editorUndoBar {
     z-index: -10;
     opacity: 0;

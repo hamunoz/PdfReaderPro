@@ -59,9 +59,17 @@ object HighlightBaker {
                             quadPoints
                         ).apply {
                             setColor(highlight.color.toDeviceRgb())
-                            // Shown by readers that display annotation contents.
-                            setContents(PdfString(highlight.text))
-                            highlight.label?.let { setTitle(PdfString(it)) }
+
+                            // /Contents is the note attached to the markup, not a copy
+                            // of the marked text. Writing the highlighted text here
+                            // made every reader pop up a box repeating the words
+                            // already under the highlight. Only a real note belongs
+                            // here, and a highlight with neither note nor label gets
+                            // no popup at all.
+                            highlight.note?.takeIf { it.isNotBlank() }
+                                ?.let { setContents(PdfString(it)) }
+                            highlight.label?.takeIf { it.isNotBlank() }
+                                ?.let { setTitle(PdfString(it)) }
                         }
 
                         page.addAnnotation(annotation)
