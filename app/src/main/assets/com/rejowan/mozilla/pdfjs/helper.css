@@ -50,6 +50,64 @@
     display: none;
 }
 
+/* hideAllControls() hides #sidebarContainer outright, so nothing should ever be
+   offset to make room for it. If the sidebarOpen class does get set, PDF.js shifts
+   #viewerContainer by --sidebar-width (200px) and leaves a blank strip where the
+   invisible sidebar would be. Its own max-width:840px rule already zeroes this out,
+   which is why the strip only shows up on wide viewports such as landscape on large
+   phones. Zero it out at every width instead. (#73) */
+#outerContainer.sidebarOpen #viewerContainer:not(.pdfPresentationMode),
+#outerContainer.sidebarOpen #loadingBar {
+    inset-inline-start: 0;
+}
+
+/* Persistent text highlights (#41).
+   The layer sits under the text layer and never takes pointer events, so text
+   selection keeps working over the top of a highlight. Taps are hit-tested by hand
+   in highlightIdAtPoint() instead. */
+.jwi-highlight-layer {
+    position: absolute;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.jwi-highlight {
+    position: absolute;
+    /* Multiply keeps the glyphs readable through the fill, the way a real
+       highlighter pen behaves, rather than washing them out. */
+    mix-blend-mode: multiply;
+    border-radius: 2px;
+}
+
+/* Brief flash when jumping to a highlight from the panel, so the user can see
+   which one was selected on a page that may hold several. */
+.jwi-highlight-pulse {
+    animation: jwi-highlight-pulse 900ms ease-out 1;
+}
+
+@keyframes jwi-highlight-pulse {
+    0%   { filter: brightness(1); }
+    30%  { filter: brightness(0.82); }
+    100% { filter: brightness(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .jwi-highlight-pulse {
+        animation: none;
+    }
+}
+
+/* Popups for annotations that carry a real note. PDF.js positions these off the
+   annotation with no regard for the viewport, so on a phone they run off the right
+   edge. Cap the width and let long notes wrap instead of overflowing. */
+.annotationLayer .popupAnnotation,
+.annotationLayer .popup {
+    max-width: min(260px, 70vw);
+    overflow-wrap: break-word;
+}
+
 #editorUndoBar {
     z-index: -10;
     opacity: 0;

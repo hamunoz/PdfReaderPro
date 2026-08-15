@@ -50,8 +50,12 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.navigation.NavController
+import com.rejowan.pdfreaderpro.R
 import com.rejowan.pdfreaderpro.presentation.components.pdf.PdfViewer
 import com.rejowan.pdfreaderpro.presentation.components.pdf.print.DefaultPdfPrintAdapter
+import com.rejowan.pdfreaderpro.presentation.screens.reader.components.BakeHighlightsDialog
+import com.rejowan.pdfreaderpro.presentation.screens.reader.components.HighlightNavBar
+import com.rejowan.pdfreaderpro.presentation.screens.reader.components.HighlightsSheet
 import com.rejowan.pdfreaderpro.presentation.screens.reader.components.DeleteConfirmDialog
 import com.rejowan.pdfreaderpro.presentation.screens.reader.components.EnhancedTableOfContents
 import com.rejowan.pdfreaderpro.presentation.screens.reader.components.ErrorState
@@ -73,6 +77,7 @@ import com.rejowan.pdfreaderpro.presentation.screens.reader.components.AutoScrol
 import com.rejowan.pdfreaderpro.presentation.screens.reader.components.AutoScrollOverlay
 import com.rejowan.pdfreaderpro.presentation.screens.reader.components.TopBarMenuPanel
 import com.rejowan.pdfreaderpro.presentation.screens.reader.components.RemoveFavoriteSheet
+import com.rejowan.pdfreaderpro.presentation.screens.reader.components.SelectionActionBar
 import org.koin.androidx.compose.koinViewModel
 
 @Composable
@@ -92,6 +97,14 @@ fun ReaderScreen(
         contract = ActivityResultContracts.CreateDocument("application/pdf")
     ) { uri ->
         uri?.let { viewModel.saveToUri(it) }
+    }
+
+    // Separate launcher from the plain save, so the suggested filename can make it
+    // obvious which copy carries the highlights.
+    val bakeHighlightsLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/pdf")
+    ) { uri ->
+        uri?.let { viewModel.bakeHighlightsToUri(it) }
     }
 
     val state by viewModel.state.collectAsState()
@@ -260,6 +273,9 @@ fun ReaderScreen(
                 is ReaderEvent.SaveDocumentPicker -> {
                     saveDocumentLauncher.launch(viewModel.getDocumentFileName())
                 }
+                is ReaderEvent.BakeHighlightsPicker -> {
+                    bakeHighlightsLauncher.launch(viewModel.getHighlightedFileName())
+                }
                 is ReaderEvent.FavoriteAdded -> {
                     snackbarHostState.showSnackbar("Added to favourites")
                 }
@@ -310,6 +326,16 @@ fun ReaderScreen(
                     pdfPrintAdapter = DefaultPdfPrintAdapter(ctx).also {
                         it.defaultFileName = viewModel.pdfPath.substringAfterLast("/")
                     }
+
+                    // Adds "Highlight" beside Copy in the text selection menu.
+                    selectionMenuItems = listOf(
+                        PdfViewer.SelectionMenuItem(
+                            id = MENU_ID_HIGHLIGHT,
+                            title = ctx.getString(R.string.highlight)
+                        ) {
+                            viewModel.onAction(ReaderAction.StartHighlight)
+                        }
+                    )
 
                     onReady {
                         ui.toolbarEnabled = false
@@ -392,7 +418,13 @@ fun ReaderScreen(
                             viewModel.onAction(ReaderAction.ClearSearch)
                             viewModel.onAction(ReaderAction.ToggleSearch)
                         },
-                        isDarkMode = isDarkMode
+                        isDarkMode = isDarkMode,
+                        highlightMatchCount = state.highlightsMatchingSearch.size,
+                        onHighlightMatchesClick = {
+                            viewModel.onAction(
+                                ReaderAction.ShowHighlightsSheet(state.searchQuery)
+                            )
+                        }
                     )
                 }
 
@@ -423,6 +455,43 @@ fun ReaderScreen(
                     } else {
                         Modifier.align(Alignment.TopEnd)
                     }
+                )
+
+                // The app's own selection actions, anchored under the selection. The
+                // system menu keeps Copy and friends above it.
+                val isEditingHighlight = state.isHighlightPickerVisible && state.editingHighlightId != null
+                SelectionActionBar(
+                    isVisible = isEditingHighlight || state.pendingSelection != null,
+                    anchor = if (isEditingHighlight) state.editingAnchor else state.pendingSelection?.anchor,
+                    viewerWidthDp = configuration.screenWidthDp.toFloat(),
+                    viewerHeightDp = configuration.screenHeightDp.toFloat(),
+                    onHighlight = { color ->
+                        if (isEditingHighlight) {
+                            viewModel.onAction(ReaderAction.ApplyHighlightColor(color))
+                        } else {
+                            viewModel.onAction(ReaderAction.HighlightSelection(color))
+                        }
+                    },
+                    selectedColor = state.editingHighlight?.color,
+                    onDelete = state.editingHighlightId?.let { id ->
+                        { viewModel.onAction(ReaderAction.DeleteHighlight(id)) }
+                    },
+                    modifier = Modifier.align(Alignment.TopStart)
+                )
+
+                // Highlight navigation strip, above the control bar. Jumping to a
+                // highlight brings it near the top of the view, so a strip up there
+                // covered the very thing it had just navigated to.
+                HighlightNavBar(
+                    isVisible = state.isHighlightNavVisible && !state.isHighlightPickerVisible,
+                    positionLabel = state.highlightPositionLabel,
+                    onPrevious = { viewModel.onAction(ReaderAction.PreviousHighlight) },
+                    onNext = { viewModel.onAction(ReaderAction.NextHighlight) },
+                    onClose = { viewModel.onAction(ReaderAction.HideHighlightNav) },
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .windowInsetsPadding(WindowInsets.navigationBars)
+                        .padding(bottom = if (state.isToolbarVisible && !state.isFullScreen) 96.dp else 24.dp)
                 )
 
                 // Floating control bar at bottom
@@ -535,6 +604,8 @@ fun ReaderScreen(
         ViewModeSheet(
             currentScrollMode = state.scrollMode,
             isSnapEnabled = state.isSnapEnabled,
+            lockHorizontalScroll = state.lockHorizontalScroll,
+            canLockHorizontalScroll = state.canLockHorizontalScroll,
             isAutoHideToolbar = state.autoHideToolbar,
             isScrubberOnScroll = state.scrubberOnScroll,
             isTapToTurnPage = state.tapToTurnPage,
@@ -543,6 +614,9 @@ fun ReaderScreen(
             },
             onSnapToggle = { enabled ->
                 viewModel.onAction(ReaderAction.SetSnapEnabled(enabled))
+            },
+            onLockHorizontalScrollToggle = { enabled ->
+                viewModel.onAction(ReaderAction.SetLockHorizontalScroll(enabled))
             },
             onAutoHideToolbarToggle = { enabled ->
                 viewModel.onAction(ReaderAction.SetAutoHideToolbar(enabled))
@@ -610,9 +684,31 @@ fun ReaderScreen(
         )
     }
 
+    // Highlights Sheet
+    if (state.isHighlightsSheetVisible) {
+        HighlightsSheet(
+            highlights = state.allHighlights,
+            currentPage = state.currentPage,
+            onHighlightClick = { highlight ->
+                viewModel.onAction(ReaderAction.GoToHighlight(highlight.id))
+            },
+            onDeleteHighlight = { highlight ->
+                viewModel.onAction(ReaderAction.DeleteHighlight(highlight.id))
+            },
+            onDismiss = { viewModel.onAction(ReaderAction.HideHighlightsSheet) },
+            initialQuery = state.highlightsSheetQuery
+        )
+    }
+
     // More Options Sheet
     if (state.isMoreOptionsSheetVisible) {
         MoreOptionsSheet(
+            onHighlightsClick = {
+                viewModel.onAction(ReaderAction.ShowHighlightsSheet())
+            },
+            onSaveWithHighlightsClick = {
+                viewModel.onAction(ReaderAction.ShowBakeHighlightsDialog)
+            },
             onBookmarksClick = {
                 viewModel.onAction(ReaderAction.ShowBookmarksSheet)
             },
@@ -682,6 +778,15 @@ fun ReaderScreen(
         onDismiss = { viewModel.onAction(ReaderAction.HideTopBarMenu) }
     )
 
+    // Confirmation for writing highlights into a copy of the PDF
+    if (state.isBakeHighlightsDialogVisible) {
+        BakeHighlightsDialog(
+            highlightCount = state.highlights.size,
+            onConfirm = { viewModel.onAction(ReaderAction.ConfirmBakeHighlights) },
+            onDismiss = { viewModel.onAction(ReaderAction.HideBakeHighlightsDialog) }
+        )
+    }
+
     // Remove favourite confirmation sheet
     if (state.isRemoveFavoriteDialogVisible) {
         RemoveFavoriteSheet(
@@ -690,3 +795,11 @@ fun ReaderScreen(
         )
     }
 }
+
+/**
+ * Menu item id for "Highlight" in the text selection menu.
+ *
+ * Must be stable, since the menu is rebuilt on every prepare pass and items are
+ * matched back by id.
+ */
+private const val MENU_ID_HIGHLIGHT = 0x48_4C_47_31

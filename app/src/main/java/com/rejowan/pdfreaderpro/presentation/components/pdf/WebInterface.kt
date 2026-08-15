@@ -11,6 +11,10 @@ import com.rejowan.pdfreaderpro.presentation.components.pdf.PdfViewer.PageSpread
 import com.rejowan.pdfreaderpro.presentation.components.pdf.js.getBoolean
 import com.rejowan.pdfreaderpro.presentation.components.pdf.js.toJsHex
 import com.rejowan.pdfreaderpro.presentation.components.pdf.model.SideBarTreeItem
+import com.rejowan.pdfreaderpro.presentation.components.pdf.model.DocumentHighlight
+import com.rejowan.pdfreaderpro.presentation.components.pdf.model.TappedHighlight
+import com.rejowan.pdfreaderpro.presentation.components.pdf.model.TextSelection
+import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import org.json.JSONObject
 
@@ -198,6 +202,60 @@ internal class WebInterface(private val pdfViewer: PdfViewer) {
     @JavascriptInterface
     fun onAutoScrollEnd() = post {
         pdfViewer.listeners.forEach { it.onAutoScrollEnd() }
+    }
+
+    /**
+     * @param selectionJson A [TextSelection] as JSON, or "" when the selection was
+     * cleared or holds nothing usable.
+     */
+    @JavascriptInterface
+    fun onTextSelected(selectionJson: String) = post {
+        val selection = parseSelection(selectionJson)
+        pdfViewer.currentTextSelection = selection
+        pdfViewer.listeners.forEach { it.onTextSelectionChange(selection) }
+    }
+
+    /** @param payload A JSON array of [DocumentHighlight]. */
+    @JavascriptInterface
+    fun onDocumentHighlightsLoaded(payload: String) = post {
+        val highlights = try {
+            Json.decodeFromString<List<DocumentHighlight>>(payload)
+        } catch (e: SerializationException) {
+            emptyList()
+        } catch (e: IllegalArgumentException) {
+            emptyList()
+        }
+
+        pdfViewer.listeners.forEach { it.onDocumentHighlightsLoaded(highlights) }
+    }
+
+    /** @param payload A [TappedHighlight] as JSON, or "" when nothing was hit. */
+    @JavascriptInterface
+    fun onHighlightTapped(payload: String) = post {
+        val tapped = try {
+            Json.decodeFromString<TappedHighlight>(payload)
+        } catch (e: SerializationException) {
+            null
+        } catch (e: IllegalArgumentException) {
+            null
+        } ?: return@post
+
+        pdfViewer.listeners.forEach { it.onHighlightTapped(tapped) }
+    }
+
+    /**
+     * Decoding failures fall back to "nothing selected". The payload is built in JS,
+     * so a malformed one should not take down the reader.
+     */
+    private fun parseSelection(selectionJson: String): TextSelection? {
+        if (selectionJson.isBlank()) return null
+        return try {
+            Json.decodeFromString<TextSelection>(selectionJson).takeIf { it.quads.isNotEmpty() }
+        } catch (e: SerializationException) {
+            null
+        } catch (e: IllegalArgumentException) {
+            null
+        }
     }
 
     @JavascriptInterface

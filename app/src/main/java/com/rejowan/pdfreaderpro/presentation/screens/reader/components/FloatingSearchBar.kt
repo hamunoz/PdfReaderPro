@@ -48,6 +48,8 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
@@ -69,7 +71,9 @@ fun FloatingSearchBar(
     onNextResult: () -> Unit,
     onClose: () -> Unit,
     modifier: Modifier = Modifier,
-    isDarkMode: Boolean = true
+    isDarkMode: Boolean = true,
+    highlightMatchCount: Int = 0,
+    onHighlightMatchesClick: () -> Unit = {}
 ) {
     val surfaceColor = if (isDarkMode) SurfaceDark.copy(alpha = 0.95f) else Color.White.copy(alpha = 0.95f)
     val contentColor = if (isDarkMode) Color.White else Color.Black
@@ -189,6 +193,30 @@ fun FloatingSearchBar(
                         }
                     }
 
+                    // How many of the hits the user has already highlighted. Tapping
+                    // opens the highlights panel filtered to the same query.
+                    if (highlightMatchCount > 0 && !isSearching) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFFFFFF98).copy(alpha = 0.30f),
+                            onClick = onHighlightMatchesClick
+                        ) {
+                            Text(
+                                text = "$highlightMatchCount",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Medium
+                                ),
+                                color = contentColor,
+                                modifier = Modifier
+                                    .semantics {
+                                        contentDescription = highlightMatchesLabel(highlightMatchCount)
+                                    }
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+
                     // Navigation buttons
                     if (resultCount > 0 && !isSearching) {
                         SearchNavButton(
@@ -277,3 +305,9 @@ private fun SearchNavButton(
         )
     }
 }
+
+/**
+ * Spoken label for the highlighted-match chip, which shows only a bare number.
+ */
+private fun highlightMatchesLabel(count: Int): String =
+    "$count matching highlights"

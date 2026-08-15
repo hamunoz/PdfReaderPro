@@ -6,8 +6,16 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.rejowan.pdfreaderpro.R
 import com.rejowan.pdfreaderpro.data.local.PasswordStorage
+import com.rejowan.pdfreaderpro.data.local.database.dao.AnnotationDao
 import com.rejowan.pdfreaderpro.data.local.database.dao.BookmarkDao
 import com.rejowan.pdfreaderpro.data.local.database.entity.BookmarkEntity
+import com.rejowan.pdfreaderpro.data.local.database.dao.FilePreferenceDao
+import com.rejowan.pdfreaderpro.data.local.database.entity.FilePreferenceEntity
+import com.rejowan.pdfreaderpro.data.mapper.toEntity
+import com.rejowan.pdfreaderpro.data.mapper.toRendered
+import com.rejowan.pdfreaderpro.data.mapper.toHighlight
+import com.rejowan.pdfreaderpro.domain.model.Highlight
+import com.rejowan.pdfreaderpro.domain.model.HighlightQuad
 import com.rejowan.pdfreaderpro.domain.model.QuickZoomPreset
 import com.rejowan.pdfreaderpro.domain.model.ReadingTheme as DomainReadingTheme
 import com.rejowan.pdfreaderpro.domain.model.ScreenOrientation as DomainScreenOrientation
@@ -18,6 +26,9 @@ import com.rejowan.pdfreaderpro.domain.repository.RecentRepository
 import kotlinx.coroutines.flow.first
 import com.rejowan.pdfreaderpro.presentation.components.pdf.PdfViewer
 import com.rejowan.pdfreaderpro.presentation.components.pdf.addListener
+import com.rejowan.pdfreaderpro.presentation.components.pdf.model.PdfQuad
+import com.rejowan.pdfreaderpro.presentation.components.pdf.model.RenderedHighlight
+import kotlinx.coroutines.delay
 import com.rejowan.pdfreaderpro.presentation.screens.reader.components.AttachmentItem
 import com.rejowan.pdfreaderpro.presentation.screens.reader.components.OutlineItem
 import com.rejowan.pdfreaderpro.presentation.screens.reader.components.PdfInfo
@@ -32,6 +43,10 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import com.rejowan.pdfreaderpro.util.HighlightBaker
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.IOException
 import java.io.File
 
 class ReaderViewModel(
@@ -39,6 +54,8 @@ class ReaderViewModel(
     private val favoriteRepository: FavoriteRepository,
     private val preferencesRepository: PreferencesRepository,
     private val bookmarkDao: BookmarkDao,
+    private val annotationDao: AnnotationDao,
+    private val filePreferenceDao: FilePreferenceDao,
     private val applicationContext: Context,
     savedStateHandle: SavedStateHandle,
     private val passwordStorage: PasswordStorage = PasswordStorage(applicationContext)
@@ -105,12 +122,200 @@ class ReaderViewModel(
             }
             .launchIn(viewModelScope)
 
+        // Observe highlights for this PDF and keep the viewer's overlay in step
+        annotationDao.getHighlightsForPdf(pdfPath)
+            .onEach { entities ->
+                val highlights = entities.map { it.toHighlight() }
+                _state.update { state ->
+                    state.copy(
+                        highlights = highlights,
+                        // Deleting a highlight shrinks the list under the navigation
+                        // strip, so keep the index inside it.
+                        currentHighlightIndex = state.currentHighlightIndex
+                            .coerceAtMost(highlights.size + state.documentHighlights.size - 1),
+                        isHighlightNavVisible = state.isHighlightNavVisible &&
+                            (highlights.isNotEmpty() || state.documentHighlights.isNotEmpty())
+                    )
+                }
+                renderHighlights(highlights)
+            }
+            .launchIn(viewModelScope)
+
+        // Observe this document's own settings, which are separate from the global ones
+        filePreferenceDao.observe(pdfPath)
+            .onEach { preference ->
+                val locked = preference?.lockHorizontalScroll == true
+                _state.update { it.copy(lockHorizontalScroll = locked) }
+                applyHorizontalScrollLock(locked)
+            }
+            .launchIn(viewModelScope)
+
         // Load favorite state
         viewModelScope.launch {
             val isFav = favoriteRepository.isFavorite(pdfPath)
             _state.update { it.copy(isFavorite = isFav) }
         }
     }
+
+    /**
+     * Closes the highlight bar when the page moves under it.
+     *
+     * Only closes an edit bar. A bar opened for a live selection is left alone,
+     * since the selection itself survives and the system moves its handles with it.
+     */
+    private fun dismissHighlightBarOnViewChange() {
+        if (!_state.value.isHighlightPickerVisible) return
+        if (_state.value.editingHighlightId == null) return
+
+        _state.update {
+            it.copy(
+                isHighlightPickerVisible = false,
+                editingHighlightId = null,
+                editingAnchor = null
+            )
+        }
+    }
+
+    /**
+     * Pushes the horizontal lock to the viewer.
+     *
+     * A no-op until the viewer is attached, so [setPdfViewer] applies it again once
+     * it is.
+     */
+    private fun applyHorizontalScrollLock(locked: Boolean) {
+        pdfViewer?.setHorizontalScrollLock(locked)
+    }
+
+    /**
+     * Pushes the current highlights to the viewer.
+     *
+     * A no-op until the viewer is attached. [setPdfViewer] renders again once it is,
+     * so highlights loaded before the viewer was ready are not lost.
+     */
+    private fun renderHighlights(highlights: List<Highlight>) {
+        val viewer = pdfViewer ?: return
+        viewer.setHighlights(highlights.map { it.toRendered(HIGHLIGHT_FILL_ALPHA) })
+    }
+
+    /**
+     * Creates a highlight from the current selection, or recolours the one the
+     * picker is editing.
+     */
+    private fun applyHighlightColor(color: Int) {
+        val state = _state.value
+        val editingId = state.editingHighlightId
+
+        viewModelScope.launch {
+            if (editingId != null) {
+                val existing = annotationDao.getById(editingId)
+                if (existing != null) {
+                    annotationDao.update(
+                        existing.copy(color = color, updatedAt = System.currentTimeMillis())
+                    )
+                }
+            } else {
+                val selection = state.capturedSelection ?: return@launch
+                // Page numbers arrive 1-based from the viewer and are stored 0-based,
+                // matching bookmarks.
+                val pageNumber = selection.pageNumber - 1
+                val nextSortIndex =
+                    (annotationDao.getMaxSortIndexForPage(pdfPath, pageNumber) ?: -1) + 1
+
+                annotationDao.insert(
+                    Highlight(
+                        pdfPath = pdfPath,
+                        pageNumber = pageNumber,
+                        text = selection.text,
+                        quads = selection.quads.map { HighlightQuad(it.x, it.y, it.w, it.h) },
+                        color = color,
+                        sortIndex = nextSortIndex
+                    ).toEntity()
+                )
+
+                // The selection has served its purpose, and leaving it up would keep
+                // the system selection handles over the new highlight.
+                pdfViewer?.removeTextSelection()
+            }
+
+            _state.update {
+                it.copy(
+                    isHighlightPickerVisible = false,
+                    editingHighlightId = null,
+                    editingAnchor = null,
+                    capturedSelection = null,
+                    pendingSelection = null
+                )
+            }
+        }
+    }
+
+    /** Jumps to a highlight's page, then pulses it once the page has rendered. */
+    private fun goToHighlight(highlightId: Long) {
+        val highlights = _state.value.allHighlights
+        val index = highlights.indexOfFirst { it.id == highlightId }
+        if (index < 0) return
+
+        _state.update {
+            it.copy(
+                isHighlightsSheetVisible = false,
+                currentHighlightIndex = index,
+                isHighlightNavVisible = true
+            )
+        }
+
+        scrollToHighlight(highlights[index])
+    }
+
+    /**
+     * Moves to the next or previous highlight, wrapping at both ends.
+     *
+     * Order comes straight from [ReaderState.highlights], which the DAO returns by
+     * page then sortIndex, so this and the panel can never disagree.
+     */
+    private fun stepHighlight(forward: Boolean) {
+        val highlights = _state.value.allHighlights
+        if (highlights.isEmpty()) return
+
+        val current = _state.value.currentHighlightIndex
+        val next = when {
+            // Nothing focused yet: start at either end depending on direction.
+            current < 0 -> if (forward) 0 else highlights.lastIndex
+            forward -> (current + 1) % highlights.size
+            else -> (current - 1 + highlights.size) % highlights.size
+        }
+
+        _state.update { it.copy(currentHighlightIndex = next, isHighlightNavVisible = true) }
+        scrollToHighlight(highlights[next])
+    }
+
+    private fun scrollToHighlight(highlight: Highlight) {
+        val viewer = pdfViewer ?: return
+
+        // Viewer pages are 1-based.
+        viewer.goToPage(highlight.pageNumber + 1)
+
+        viewModelScope.launch {
+            // Neither path can run until the page has rendered, and goToPage does not
+            // render synchronously.
+            delay(HIGHLIGHT_SCROLL_DELAY_MS)
+
+            if (highlight.isEditable) {
+                viewer.scrollToHighlight(highlight.id)
+            } else {
+                // Painted by the viewer's annotation layer rather than our overlay, so
+                // there is no element of ours to find. Scroll to the quad instead,
+                // otherwise a jump lands on the page and leaves the highlight off
+                // screen. No pulse, for the same reason.
+                highlight.quads.firstOrNull()?.let { quad ->
+                    viewer.scrollToPageQuad(
+                        pageNumber = highlight.pageNumber + 1,
+                        quad = PdfQuad(quad.x, quad.y, quad.w, quad.h)
+                    )
+                }
+            }
+        }
+    }
+
 
     // Mapping functions from domain models to reader state models
     private fun mapDomainScrollMode(mode: DomainScrollMode): ScrollMode {
@@ -140,6 +345,9 @@ class ReaderViewModel(
     fun setPdfViewer(viewer: PdfViewer) {
         pdfViewer = viewer
         setupPdfViewerListeners(viewer)
+        // Both may have loaded from the database before the viewer attached.
+        renderHighlights(_state.value.highlights)
+        applyHorizontalScrollLock(_state.value.lockHorizontalScroll)
     }
 
     private fun applyInitialSettings(viewer: PdfViewer) {
@@ -185,6 +393,14 @@ class ReaderViewModel(
                         passwordSubmitted = false
                     )
                 }
+
+                // Push these again now the document exists. Both the viewer attaching
+                // and the database emitting happen before the document has loaded, so
+                // anything sent earlier landed on an empty viewer and was lost.
+                renderHighlights(_state.value.highlights)
+                applyHorizontalScrollLock(_state.value.lockHorizontalScroll)
+                // The file's own highlights only become readable once it is open.
+                viewer.loadDocumentHighlights()
 
                 // Determine which page to start on
                 val lastPage = storedLastPage // Capture for smart cast
@@ -242,6 +458,29 @@ class ReaderViewModel(
             },
             onScaleChange = { scale ->
                 _state.update { it.copy(zoom = scale) }
+                dismissHighlightBarOnViewChange()
+            },
+            onScrollChange = { _, _, _ ->
+                // The bar is anchored to a position in the viewer, so once the page
+                // moves underneath it, it is pointing at nothing.
+                dismissHighlightBarOnViewChange()
+            },
+            onDocumentHighlightsLoaded = { loaded ->
+                _state.update { state ->
+                    state.copy(
+                        documentHighlights = loaded.map { it.toHighlight(pdfPath) },
+                        // The merged list just grew or shrank, so keep the strip's
+                        // index inside it.
+                        currentHighlightIndex = state.currentHighlightIndex
+                            .coerceAtMost(state.highlights.size + loaded.size - 1)
+                    )
+                }
+            },
+            onTextSelectionChange = { selection ->
+                onAction(ReaderAction.TextSelectionChanged(selection))
+            },
+            onHighlightTapped = { highlight ->
+                onAction(ReaderAction.HighlightTapped(highlight))
             },
             onPasswordDialogChange = { isOpen ->
                 when {
@@ -443,7 +682,23 @@ class ReaderViewModel(
             is ReaderAction.PreviousPage -> {
                 pdfViewer?.goToPreviousPage()
             }
-            is ReaderAction.TapToTurnOrToggle -> handleTapToTurnOrToggle(action)
+            is ReaderAction.TapToTurnOrToggle -> {
+                // A tap elsewhere dismisses the highlight bar rather than falling
+                // through to the toolbar toggle, which is what a floating bar
+                // anchored to the page should do.
+                if (_state.value.isHighlightPickerVisible) {
+                    _state.update {
+                        it.copy(
+                            isHighlightPickerVisible = false,
+                            editingHighlightId = null,
+                            editingAnchor = null,
+                            capturedSelection = null
+                        )
+                    }
+                } else {
+                    handleTapToTurnOrToggle(action)
+                }
+            }
 
             is ReaderAction.SetZoom -> {
                 _state.update { it.copy(zoom = action.zoom.coerceIn(it.minZoom, it.maxZoom)) }
@@ -529,6 +784,21 @@ class ReaderViewModel(
                     ScrollMode.HORIZONTAL -> PdfViewer.PageScrollMode.HORIZONTAL
                 }
                 pdfViewer?.pageScrollMode = scrollMode
+                // Horizontal mode needs that axis, so the lock cannot survive the
+                // switch. The viewer releases it too; this keeps our state honest.
+                if (action.mode == ScrollMode.HORIZONTAL && _state.value.lockHorizontalScroll) {
+                    _state.update { it.copy(lockHorizontalScroll = false) }
+                    applyHorizontalScrollLock(false)
+                    viewModelScope.launch {
+                        filePreferenceDao.save(
+                            (filePreferenceDao.get(pdfPath) ?: FilePreferenceEntity(pdfPath = pdfPath))
+                                .copy(
+                                    lockHorizontalScroll = false,
+                                    updatedAt = System.currentTimeMillis()
+                                )
+                        )
+                    }
+                }
                 // Persist to global settings
                 viewModelScope.launch {
                     val domainMode = when (action.mode) {
@@ -613,6 +883,23 @@ class ReaderViewModel(
                 }
             }
 
+            is ReaderAction.SetLockHorizontalScroll -> {
+                // Nothing to lock along the axis the document scrolls on.
+                if (!_state.value.canLockHorizontalScroll) return
+
+                _state.update { it.copy(lockHorizontalScroll = action.enabled) }
+                applyHorizontalScrollLock(action.enabled)
+                viewModelScope.launch {
+                    filePreferenceDao.save(
+                        (filePreferenceDao.get(pdfPath) ?: FilePreferenceEntity(pdfPath = pdfPath))
+                            .copy(
+                                lockHorizontalScroll = action.enabled,
+                                updatedAt = System.currentTimeMillis()
+                            )
+                    )
+                }
+            }
+
             is ReaderAction.Search -> {
                 _state.update { it.copy(searchQuery = action.query, isSearching = true) }
                 if (action.query.isNotBlank()) {
@@ -660,6 +947,118 @@ class ReaderViewModel(
             is ReaderAction.ConfirmDelete -> deleteDocument()
 
             is ReaderAction.ToggleRotationLock -> _state.update { it.copy(isRotationLocked = !it.isRotationLocked) }
+
+            // Highlights
+            // Only tracks the live selection. It deliberately does not close the
+            // picker, because dismissing the selection action mode clears the
+            // selection, which would otherwise close the picker the instant it opened.
+            is ReaderAction.TextSelectionChanged -> {
+                _state.update { it.copy(pendingSelection = action.selection) }
+            }
+
+            is ReaderAction.StartHighlight -> {
+                val selection = _state.value.pendingSelection ?: return
+                _state.update {
+                    it.copy(
+                        isHighlightPickerVisible = true,
+                        editingHighlightId = null,
+                        capturedSelection = selection
+                    )
+                }
+            }
+
+            is ReaderAction.ApplyHighlightColor -> applyHighlightColor(action.color)
+
+            // From the selection action bar, which shows the colours inline, so there
+            // is no separate picker step to capture the selection first.
+            is ReaderAction.HighlightSelection -> {
+                val selection = _state.value.pendingSelection ?: return
+                _state.update { it.copy(capturedSelection = selection, editingHighlightId = null) }
+                applyHighlightColor(action.color)
+            }
+
+            is ReaderAction.HighlightTapped -> {
+                _state.update {
+                    it.copy(
+                        isHighlightPickerVisible = true,
+                        editingHighlightId = action.highlight.id,
+                        editingAnchor = action.highlight.anchor
+                    )
+                }
+            }
+
+            is ReaderAction.DeleteHighlight -> {
+                viewModelScope.launch {
+                    annotationDao.deleteById(action.highlightId)
+                    _state.update {
+                        it.copy(
+                            isHighlightPickerVisible = false,
+                            editingHighlightId = null,
+                            editingAnchor = null
+                        )
+                    }
+                }
+            }
+
+            is ReaderAction.SetHighlightLabel -> {
+                viewModelScope.launch {
+                    val existing = annotationDao.getById(action.highlightId) ?: return@launch
+                    annotationDao.update(
+                        existing.copy(
+                            label = action.label?.takeIf { it.isNotBlank() },
+                            updatedAt = System.currentTimeMillis()
+                        )
+                    )
+                }
+            }
+
+            is ReaderAction.DismissHighlightPicker -> {
+                _state.update {
+                    it.copy(
+                        isHighlightPickerVisible = false,
+                        editingHighlightId = null,
+                        editingAnchor = null,
+                        capturedSelection = null
+                    )
+                }
+            }
+
+            is ReaderAction.GoToHighlight -> goToHighlight(action.highlightId)
+
+            is ReaderAction.ShowHighlightsSheet -> _state.update {
+                it.copy(isHighlightsSheetVisible = true, highlightsSheetQuery = action.query)
+            }
+            is ReaderAction.HideHighlightsSheet -> _state.update { it.copy(isHighlightsSheetVisible = false) }
+
+            is ReaderAction.NextHighlight -> stepHighlight(forward = true)
+            is ReaderAction.PreviousHighlight -> stepHighlight(forward = false)
+
+            is ReaderAction.HideHighlightNav -> {
+                _state.update { it.copy(isHighlightNavVisible = false, currentHighlightIndex = -1) }
+            }
+
+            is ReaderAction.ShowBakeHighlightsDialog -> {
+                if (_state.value.highlights.isEmpty()) {
+                    viewModelScope.launch {
+                        _events.send(
+                            ReaderEvent.ShowMessage(
+                                applicationContext.getString(R.string.bake_highlights_none)
+                            )
+                        )
+                    }
+                } else {
+                    _state.update { it.copy(isBakeHighlightsDialogVisible = true) }
+                }
+            }
+
+            is ReaderAction.HideBakeHighlightsDialog -> {
+                _state.update { it.copy(isBakeHighlightsDialogVisible = false) }
+            }
+
+            is ReaderAction.ConfirmBakeHighlights -> {
+                _state.update { it.copy(isBakeHighlightsDialogVisible = false) }
+                viewModelScope.launch { _events.send(ReaderEvent.BakeHighlightsPicker) }
+            }
 
             // Page rotation
             is ReaderAction.RotateClockwise -> {
@@ -1024,13 +1423,65 @@ class ReaderViewModel(
         }
     }
 
+    /**
+     * Writes the stored highlights into a copy of the PDF at [uri].
+     *
+     * Runs off the main thread: this reads and rewrites the whole document, which is
+     * far too slow to sit on the UI thread for a large file.
+     *
+     * The Room records are deliberately kept. They remain the source of truth in the
+     * app, and the copy is an export rather than a migration.
+     */
+    fun bakeHighlightsToUri(uri: android.net.Uri) {
+        val highlights = _state.value.highlights
+        if (highlights.isEmpty()) return
+
+        viewModelScope.launch {
+            _state.update { it.copy(isBakingHighlights = true) }
+            try {
+                val written = withContext(Dispatchers.IO) {
+                    applicationContext.contentResolver.openOutputStream(uri)?.use { output ->
+                        HighlightBaker.bake(File(pdfPath), output, highlights)
+                    } ?: throw IOException("Could not open the destination file")
+                }
+                _events.send(
+                    ReaderEvent.ShowMessage(
+                        applicationContext.getString(R.string.bake_highlights_done, written)
+                    )
+                )
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to bake highlights into a copy")
+                _events.send(
+                    ReaderEvent.Error(
+                        applicationContext.getString(
+                            R.string.bake_highlights_failed,
+                            e.message ?: ""
+                        )
+                    )
+                )
+            } finally {
+                _state.update { it.copy(isBakingHighlights = false) }
+            }
+        }
+    }
+
     fun getDocumentFileName(): String {
         return File(pdfPath).name
+    }
+
+    /** Suggested name for the highlighted copy, so it is not mistaken for the original. */
+    fun getHighlightedFileName(): String {
+        val file = File(pdfPath)
+        return "${file.nameWithoutExtension}-highlighted.pdf"
     }
 
     private companion object {
         // Fraction of the page's leading/trailing edge that acts as a page-turn tap zone.
         // The middle (1 - 2 * fraction) toggles the toolbar instead.
         const val TAP_TURN_ZONE_FRACTION = 1f / 3f
+
+        // Time allowed for a page to render after goToPage before trying to pulse a
+        // highlight on it. scrollToHighlight only finds elements on rendered pages.
+        const val HIGHLIGHT_SCROLL_DELAY_MS = 350L
     }
 }

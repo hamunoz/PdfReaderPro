@@ -23,4 +23,5 @@ val databaseModule = module {
     single { get<PdfDatabase>().favoriteDao() }
     single { get<PdfDatabase>().bookmarkDao() }
     single { get<PdfDatabase>().annotationDao() }
+    single { get<PdfDatabase>().filePreferenceDao() }
 }

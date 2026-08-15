@@ -1,6 +1,10 @@
 package com.rejowan.pdfreaderpro.presentation.screens.reader
 
 import com.rejowan.pdfreaderpro.data.local.database.entity.BookmarkEntity
+import com.rejowan.pdfreaderpro.domain.model.Highlight
+import com.rejowan.pdfreaderpro.presentation.components.pdf.model.SelectionAnchor
+import com.rejowan.pdfreaderpro.presentation.components.pdf.model.TappedHighlight
+import com.rejowan.pdfreaderpro.presentation.components.pdf.model.TextSelection
 import com.rejowan.pdfreaderpro.presentation.screens.reader.components.AttachmentItem
 import com.rejowan.pdfreaderpro.presentation.screens.reader.components.OutlineItem
 
@@ -118,10 +122,106 @@ data class ReaderState(
     val isTopBarMenuVisible: Boolean = false,
 
     // Remove favourite confirmation
-    val isRemoveFavoriteDialogVisible: Boolean = false
+    val isRemoveFavoriteDialogVisible: Boolean = false,
+
+    // Highlights the app owns, from its database, in reading order
+    val highlights: List<Highlight> = emptyList(),
+
+    /**
+     * Highlights the PDF file itself carries, read only. Either baked by us earlier
+     * or added by another application.
+     */
+    val documentHighlights: List<Highlight> = emptyList(),
+
+    // The live text selection, non-null while the user has text selected
+    val pendingSelection: TextSelection? = null,
+
+    /**
+     * Snapshot taken when the user chooses to highlight.
+     *
+     * Held separately from [pendingSelection] because dismissing the selection
+     * action mode clears the underlying selection, which would otherwise pull the
+     * text out from under the colour picker before a colour is chosen.
+     */
+    val capturedSelection: TextSelection? = null,
+
+    // Colour picker, shown for a new highlight or when editing an existing one
+    val isHighlightPickerVisible: Boolean = false,
+
+    // Set when the picker is editing an existing highlight rather than creating one
+    val editingHighlightId: Long? = null,
+
+    /** Where the highlight being edited sits, so its bar anchors to it. */
+    val editingAnchor: SelectionAnchor? = null,
+
+    val isHighlightsSheetVisible: Boolean = false,
+
+    /** Pre-filled search for the highlights panel, set when opening it from search. */
+    val highlightsSheetQuery: String = "",
+
+    /**
+     * Index into [highlights] of the highlight currently being stepped through,
+     * or -1 when none is.
+     */
+    val currentHighlightIndex: Int = -1,
+
+    /** The prev/next strip, shown after jumping to a highlight. */
+    val isHighlightNavVisible: Boolean = false,
+
+    /** Confirmation for writing highlights into a copy of the PDF. */
+    val isBakeHighlightsDialogVisible: Boolean = false,
+
+    val isBakingHighlights: Boolean = false,
+
+    /**
+     * Freezes horizontal panning at the page's current position. Stored per
+     * document, not globally, and only meaningful in vertical scroll mode.
+     */
+    val lockHorizontalScroll: Boolean = false
 ) {
     val pageLabel: String
         get() = "${currentPage + 1} / $totalPages"
+
+    /** The highlight the colour picker is currently editing, if any. */
+    val editingHighlight: Highlight?
+        get() = editingHighlightId?.let { id -> highlights.firstOrNull { it.id == id } }
+
+    /**
+     * Whether the horizontal lock can be used right now.
+     *
+     * Horizontal scroll mode needs that axis to move between pages, so the toggle
+     * is shown disabled rather than hidden, which would leave people hunting for a
+     * setting that silently vanished.
+     */
+    val canLockHorizontalScroll: Boolean
+        get() = scrollMode == ScrollMode.VERTICAL
+
+    /**
+     * Everything the panel, navigation and search work from: the app's own
+     * highlights and the document's own, in one reading order.
+     */
+    val allHighlights: List<Highlight>
+        get() = (highlights + documentHighlights)
+            .sortedWith(compareBy({ it.pageNumber }, { it.sortIndex }, { it.createdAt }))
+
+    /** 1-based position for the navigation strip, e.g. "3 / 12". */
+    val highlightPositionLabel: String
+        get() = "${currentHighlightIndex + 1} / ${allHighlights.size}"
+
+    /**
+     * Highlights whose text matches the current search.
+     *
+     * Lets the search bar show how many of the hits the user has already marked.
+     * Matched here rather than against the viewer's own results because PDF.js
+     * reports match counts, not match positions, so there is nothing to intersect
+     * a stored quad against.
+     */
+    val highlightsMatchingSearch: List<Highlight>
+        get() = if (searchQuery.isBlank()) {
+            emptyList()
+        } else {
+            allHighlights.filter { it.text.contains(searchQuery, ignoreCase = true) }
+        }
 }
 
 /**
@@ -161,6 +261,7 @@ sealed class ReaderEvent {
     data object DocumentDeleted : ReaderEvent()
     data object ShareDocument : ReaderEvent()
     data object SaveDocumentPicker : ReaderEvent()
+    data object BakeHighlightsPicker : ReaderEvent()
     data object FavoriteAdded : ReaderEvent()
     data class Error(val message: String) : ReaderEvent()
 }
@@ -225,6 +326,7 @@ sealed class ReaderAction {
     data class SetAutoHideToolbar(val enabled: Boolean) : ReaderAction()
     data class SetScrubberOnScroll(val enabled: Boolean) : ReaderAction()
     data class SetTapToTurnPage(val enabled: Boolean) : ReaderAction()
+    data class SetLockHorizontalScroll(val enabled: Boolean) : ReaderAction()
     data class OpenLink(val url: String) : ReaderAction()
 
     // Search
@@ -290,4 +392,26 @@ sealed class ReaderAction {
 
     // Save with picker
     data object SaveDocumentWithPicker : ReaderAction()
+
+    // Highlights
+    data class TextSelectionChanged(val selection: TextSelection?) : ReaderAction()
+    /** Opens the colour picker for the current selection. */
+    data object StartHighlight : ReaderAction()
+    /** Highlights the current selection straight away, from the selection action bar. */
+    data class HighlightSelection(val color: Int) : ReaderAction()
+    /** Creates a highlight from the current selection, or recolours the one being edited. */
+    data class ApplyHighlightColor(val color: Int) : ReaderAction()
+    data class HighlightTapped(val highlight: TappedHighlight) : ReaderAction()
+    data class DeleteHighlight(val highlightId: Long) : ReaderAction()
+    data class SetHighlightLabel(val highlightId: Long, val label: String?) : ReaderAction()
+    data object DismissHighlightPicker : ReaderAction()
+    data class GoToHighlight(val highlightId: Long) : ReaderAction()
+    data class ShowHighlightsSheet(val query: String = "") : ReaderAction()
+    data object HideHighlightsSheet : ReaderAction()
+    data object NextHighlight : ReaderAction()
+    data object PreviousHighlight : ReaderAction()
+    data object HideHighlightNav : ReaderAction()
+    data object ShowBakeHighlightsDialog : ReaderAction()
+    data object HideBakeHighlightsDialog : ReaderAction()
+    data object ConfirmBakeHighlights : ReaderAction()
 }

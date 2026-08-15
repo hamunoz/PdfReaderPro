@@ -36,7 +36,12 @@ import com.rejowan.pdfreaderpro.presentation.components.pdf.js.toJsHex
 import com.rejowan.pdfreaderpro.presentation.components.pdf.js.toJsRgba
 import com.rejowan.pdfreaderpro.presentation.components.pdf.js.toJsString
 import com.rejowan.pdfreaderpro.presentation.components.pdf.js.with
+import com.rejowan.pdfreaderpro.presentation.components.pdf.model.PdfQuad
+import com.rejowan.pdfreaderpro.presentation.components.pdf.model.RenderedHighlight
 import com.rejowan.pdfreaderpro.presentation.components.pdf.model.SideBarTreeItem
+import com.rejowan.pdfreaderpro.presentation.components.pdf.model.TextSelection
+import kotlinx.serialization.SerializationException
+import kotlinx.serialization.json.Json
 import com.rejowan.pdfreaderpro.presentation.components.pdf.print.PdfPrintAdapter
 import com.rejowan.pdfreaderpro.presentation.components.pdf.resource.AssetResourceLoader
 import com.rejowan.pdfreaderpro.presentation.components.pdf.resource.ContentResourceLoader
@@ -208,6 +213,35 @@ class PdfViewer @JvmOverloads constructor(
      * @see PdfListener.onLoadAttachments
      */
     var attachments: List<SideBarTreeItem>? = null; internal set
+
+    /**
+     * The current text selection, or `null` when nothing usable is selected.
+     *
+     * Updated as the selection changes, debounced by the viewer so it does not
+     * churn during a selection handle drag.
+     *
+     * @see PdfListener.onTextSelectionChange
+     */
+    var currentTextSelection: TextSelection? = null; internal set
+
+    /**
+     * Extra items appended to the text selection menu, alongside Copy and the rest.
+     *
+     * Set before a selection is made. Each item's [SelectionMenuItem.onClick] runs on
+     * tap, and the selection menu is then dismissed.
+     */
+    var selectionMenuItems: List<SelectionMenuItem> = emptyList()
+
+    /**
+     * An item added to the text selection menu.
+     *
+     * @param id Menu item id. Must be unique and stable across menu rebuilds.
+     */
+    data class SelectionMenuItem(
+        val id: Int,
+        val title: String,
+        val onClick: () -> Unit
+    )
 
     /**
      * Defines the list of colors available in the highlight editor's color palette.
@@ -1726,6 +1760,102 @@ class PdfViewer @JvmOverloads constructor(
         webView callDirectly "window.getSelection().removeAllRanges"()
     }
 
+    /**
+     * Scrolls a region of a page into the middle of the view.
+     *
+     * For highlights the document itself carries, which the viewer's annotation layer
+     * paints rather than our overlay, so [scrollToHighlight] has no element to find.
+     *
+     * @param pageNumber 1-based.
+     * @param quad Normalised to the unrotated page box, top-left origin.
+     */
+    fun scrollToPageQuad(pageNumber: Int, quad: PdfQuad) {
+        webView callDirectly "scrollToPageQuad"(pageNumber, quad.x, quad.y, quad.w, quad.h)
+    }
+
+    /**
+     * Reads the Highlight annotations the open document already carries.
+     *
+     * Results arrive on [PdfListener.onDocumentHighlightsLoaded]. Worth calling once
+     * per document, after it has loaded.
+     */
+    fun loadDocumentHighlights() {
+        webView callDirectly "loadDocumentHighlights"()
+    }
+
+    /**
+     * Freezes horizontal panning at the page's current horizontal position.
+     *
+     * Deliberately holds wherever the reader has panned to rather than re-centring,
+     * so someone who lined the page up on a particular column stays on it.
+     *
+     * Ignored in [PageScrollMode.HORIZONTAL]: that is the axis the document scrolls
+     * along, and locking it would strand the reader on one page. The viewer also
+     * releases the lock by itself if the scroll mode changes while it is on.
+     */
+    fun setHorizontalScrollLock(locked: Boolean) {
+        webView callDirectly "setHorizontalScrollLock"(locked)
+    }
+
+    /**
+     * Replaces the highlights drawn over the document.
+     *
+     * The viewer holds these itself and redraws them as pages scroll in and out, and
+     * whenever the zoom or rotation changes, so this only needs calling when the set
+     * of highlights actually changes.
+     *
+     * Passing an empty list clears them.
+     */
+    fun setHighlights(highlights: List<RenderedHighlight>) {
+        val payload = Json.encodeToString(highlights)
+        webView callDirectly "applyStoredHighlights"(payload.toJsString())
+    }
+
+    /**
+     * Scrolls a highlight into view and pulses it.
+     *
+     * Only works for a highlight on a page the viewer has rendered. Jump to the page
+     * first when coming from the highlights panel.
+     */
+    fun scrollToHighlight(highlightId: Long) {
+        webView callDirectly "scrollToHighlight"(highlightId)
+    }
+
+    /**
+     * Reads the current text selection directly, rather than waiting for the next
+     * [PdfListener.onTextSelectionChange].
+     *
+     * Useful at the moment the user acts on a selection, where the debounced
+     * callback may not have landed yet.
+     *
+     * @param callback Receives the selection, or `null` when nothing is selected.
+     */
+    fun getTextSelection(callback: (TextSelection?) -> Unit) {
+        webView callDirectly "getSelectionInfo"(callback = { raw ->
+            callback(parseSelectionResult(raw))
+        })
+    }
+
+    /**
+     * `evaluateJavascript` hands back a JSON-encoded return value, so the JS string
+     * arrives wrapped in quotes and escaped. Unwrap it before decoding.
+     *
+     * Returns `null` for anything malformed, since the payload is built in JS and a
+     * bad one should not take down the reader.
+     */
+    private fun parseSelectionResult(raw: String?): TextSelection? {
+        if (raw.isNullOrBlank() || raw == "null" || raw == "\"\"") return null
+        return try {
+            val unwrapped = Json.decodeFromString<String>(raw)
+            if (unwrapped.isBlank()) return null
+            Json.decodeFromString<TextSelection>(unwrapped).takeIf { it.quads.isNotEmpty() }
+        } catch (e: SerializationException) {
+            null
+        } catch (e: IllegalArgumentException) {
+            null
+        }
+    }
+
     override fun setLayerType(layerType: Int, paint: Paint?) {
         super.setLayerType(layerType, paint)
         webView.setLayerType(layerType, paint)
@@ -1751,11 +1881,24 @@ class PdfViewer @JvmOverloads constructor(
         val actionModeCallback = callback ?: simpleActionModeCallback
 
         return object : ActionMode.Callback2(), PdfListener {
-            override fun onActionItemClicked(mode: ActionMode?, item: MenuItem?) =
-                actionModeCallback.onActionItemClicked(mode, item)
+            override fun onActionItemClicked(mode: ActionMode?, item: MenuItem?): Boolean {
+                val custom = selectionMenuItems.firstOrNull { it.id == item?.itemId }
+                if (custom != null) {
+                    custom.onClick()
+                    mode?.finish()
+                    return true
+                }
 
-            override fun onPrepareActionMode(mode: ActionMode?, menu: Menu?) =
-                actionModeCallback.onPrepareActionMode(mode, menu)
+                return actionModeCallback.onActionItemClicked(mode, item)
+            }
+
+            override fun onPrepareActionMode(mode: ActionMode?, menu: Menu?): Boolean {
+                val handled = actionModeCallback.onPrepareActionMode(mode, menu)
+                // Also added here, since the framework may rebuild the menu between
+                // create and display.
+                addSelectionMenuItems(menu)
+                return handled
+            }
 
             override fun onCreateActionMode(mode: ActionMode?, menu: Menu?): Boolean {
                 if (editor.run { applyHighlightColorOnTextSelection && textHighlighterOn }) {
@@ -1768,7 +1911,9 @@ class PdfViewer @JvmOverloads constructor(
                     return true
                 }
 
-                return actionModeCallback.onCreateActionMode(mode, menu)
+                val handled = actionModeCallback.onCreateActionMode(mode, menu)
+                addSelectionMenuItems(menu)
+                return handled
             }
 
             override fun onDestroyActionMode(mode: ActionMode?) {
@@ -1793,6 +1938,20 @@ class PdfViewer @JvmOverloads constructor(
 
             override fun onEditorHighlightColorChange(highlightColor: Int) {
                 setTextSelectionColor(highlightColor)
+            }
+        }
+    }
+
+    /**
+     * Adds [selectionMenuItems] to the text selection menu, skipping any already
+     * present so repeated prepare passes cannot duplicate them.
+     */
+    private fun addSelectionMenuItems(menu: Menu?) {
+        menu ?: return
+
+        selectionMenuItems.forEach { item ->
+            if (menu.findItem(item.id) == null) {
+                menu.add(Menu.NONE, item.id, Menu.CATEGORY_SECONDARY, item.title)
             }
         }
     }

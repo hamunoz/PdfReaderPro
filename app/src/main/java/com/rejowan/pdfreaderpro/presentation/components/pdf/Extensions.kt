@@ -6,6 +6,9 @@ import android.webkit.RenderProcessGoneDetail
 import android.webkit.ValueCallback
 import android.webkit.WebChromeClient.FileChooserParams
 import com.rejowan.pdfreaderpro.presentation.components.pdf.model.SideBarTreeItem
+import com.rejowan.pdfreaderpro.presentation.components.pdf.model.DocumentHighlight
+import com.rejowan.pdfreaderpro.presentation.components.pdf.model.TappedHighlight
+import com.rejowan.pdfreaderpro.presentation.components.pdf.model.TextSelection
 import com.rejowan.pdfreaderpro.presentation.components.pdf.setting.PdfSettingsManager
 import com.rejowan.pdfreaderpro.presentation.components.pdf.setting.SharedPreferencePdfSettingsSaver
 
@@ -144,6 +147,9 @@ fun PdfViewer.addListener(
     onLoadOutline: ((outline: List<SideBarTreeItem>) -> Unit)? = null,
     onLoadAttachments: ((attachments: List<SideBarTreeItem>) -> Unit)? = null,
     onAutoScrollEnd: (() -> Unit)? = null,
+    onTextSelectionChange: ((selection: TextSelection?) -> Unit)? = null,
+    onHighlightTapped: ((highlight: TappedHighlight) -> Unit)? = null,
+    onDocumentHighlightsLoaded: ((highlights: List<DocumentHighlight>) -> Unit)? = null,
 ) {
     addListener(object : PdfListener {
         override fun onPageLoadStart() {
@@ -369,6 +375,18 @@ fun PdfViewer.addListener(
 
         override fun onAutoScrollEnd() {
             onAutoScrollEnd?.invoke()
+        }
+
+        override fun onTextSelectionChange(selection: TextSelection?) {
+            onTextSelectionChange?.invoke(selection)
+        }
+
+        override fun onDocumentHighlightsLoaded(highlights: List<DocumentHighlight>) {
+            onDocumentHighlightsLoaded?.invoke(highlights)
+        }
+
+        override fun onHighlightTapped(highlight: TappedHighlight) {
+            onHighlightTapped?.invoke(highlight)
         }
     })
 }

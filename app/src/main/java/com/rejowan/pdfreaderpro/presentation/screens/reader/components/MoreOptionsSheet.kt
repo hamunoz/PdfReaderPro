@@ -33,11 +33,13 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.rounded.Bookmark
+import androidx.compose.material.icons.rounded.FormatColorFill
 import androidx.compose.material.icons.rounded.Info
 import androidx.compose.material.icons.rounded.MoreHoriz
 import androidx.compose.material.icons.rounded.Numbers
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Print
+import androidx.compose.material.icons.rounded.SaveAlt
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -79,6 +81,8 @@ private val AccentPink = Color(0xFFF48FB1)
 @Composable
 fun MoreOptionsSheet(
     onBookmarksClick: () -> Unit,
+    onHighlightsClick: () -> Unit,
+    onSaveWithHighlightsClick: () -> Unit,
     onAutoScrollClick: () -> Unit,
     onGoToPageClick: () -> Unit,
     onPrintClick: () -> Unit,
@@ -92,6 +96,8 @@ fun MoreOptionsSheet(
     if (isLandscape) {
         MoreOptionsSideSheet(
             onBookmarksClick = onBookmarksClick,
+            onHighlightsClick = onHighlightsClick,
+            onSaveWithHighlightsClick = onSaveWithHighlightsClick,
             onAutoScrollClick = onAutoScrollClick,
             onGoToPageClick = onGoToPageClick,
             onPrintClick = onPrintClick,
@@ -102,6 +108,8 @@ fun MoreOptionsSheet(
     } else {
         MoreOptionsBottomSheet(
             onBookmarksClick = onBookmarksClick,
+            onHighlightsClick = onHighlightsClick,
+            onSaveWithHighlightsClick = onSaveWithHighlightsClick,
             onAutoScrollClick = onAutoScrollClick,
             onGoToPageClick = onGoToPageClick,
             onPrintClick = onPrintClick,
@@ -116,6 +124,8 @@ fun MoreOptionsSheet(
 @Composable
 private fun MoreOptionsBottomSheet(
     onBookmarksClick: () -> Unit,
+    onHighlightsClick: () -> Unit,
+    onSaveWithHighlightsClick: () -> Unit,
     onAutoScrollClick: () -> Unit,
     onGoToPageClick: () -> Unit,
     onPrintClick: () -> Unit,
@@ -134,6 +144,8 @@ private fun MoreOptionsBottomSheet(
     ) {
         MoreOptionsSheetContent(
             onBookmarksClick = onBookmarksClick,
+            onHighlightsClick = onHighlightsClick,
+            onSaveWithHighlightsClick = onSaveWithHighlightsClick,
             onAutoScrollClick = onAutoScrollClick,
             onGoToPageClick = onGoToPageClick,
             onPrintClick = onPrintClick,
@@ -148,6 +160,8 @@ private fun MoreOptionsBottomSheet(
 @Composable
 private fun MoreOptionsSideSheet(
     onBookmarksClick: () -> Unit,
+    onHighlightsClick: () -> Unit,
+    onSaveWithHighlightsClick: () -> Unit,
     onAutoScrollClick: () -> Unit,
     onGoToPageClick: () -> Unit,
     onPrintClick: () -> Unit,
@@ -202,6 +216,8 @@ private fun MoreOptionsSideSheet(
             ) {
                 MoreOptionsSheetContent(
                     onBookmarksClick = onBookmarksClick,
+                    onHighlightsClick = onHighlightsClick,
+                    onSaveWithHighlightsClick = onSaveWithHighlightsClick,
                     onAutoScrollClick = onAutoScrollClick,
                     onGoToPageClick = onGoToPageClick,
                     onPrintClick = onPrintClick,
@@ -224,6 +240,8 @@ private fun MoreOptionsSideSheet(
 @Composable
 private fun MoreOptionsSheetContent(
     onBookmarksClick: () -> Unit,
+    onHighlightsClick: () -> Unit,
+    onSaveWithHighlightsClick: () -> Unit,
     onAutoScrollClick: () -> Unit,
     onGoToPageClick: () -> Unit,
     onPrintClick: () -> Unit,
@@ -257,6 +275,34 @@ private fun MoreOptionsSheetContent(
                 onBookmarksClick()
             },
             animationDelay = 0
+        )
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        OptionItem(
+            icon = Icons.Rounded.FormatColorFill,
+            title = stringResource(R.string.highlights),
+            subtitle = stringResource(R.string.view_manage_highlights),
+            accentColor = AccentAmber,
+            onClick = {
+                onDismiss()
+                onHighlightsClick()
+            },
+            animationDelay = 25
+        )
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        OptionItem(
+            icon = Icons.Rounded.SaveAlt,
+            title = stringResource(R.string.save_with_highlights),
+            subtitle = stringResource(R.string.save_with_highlights_desc),
+            accentColor = AccentTeal,
+            onClick = {
+                onDismiss()
+                onSaveWithHighlightsClick()
+            },
+            animationDelay = 35
         )
 
         Spacer(modifier = Modifier.height(6.dp))

@@ -1236,3 +1236,655 @@ function performTreeItemClick(itemId) {
     return false;
 }
 // #endregion
+
+// #region text highlights (#41)
+
+// How long to wait after the last selectionchange before reporting. The event
+// fires continuously while a selection handle is being dragged.
+const SELECTION_DEBOUNCE_MS = 120;
+
+let selectionNotifyTimer = null;
+
+/**
+ * Resolves a page's view, viewport and unrotated page box.
+ *
+ * Returns null until the page has actually been rendered, since pages are
+ * virtualised and viewport is only populated once a page has been laid out.
+ */
+function getHighlightPageView(pageNumber) {
+    const viewer = PDFViewerApplication.pdfViewer;
+    if (!viewer) return null;
+
+    const pageView = viewer.getPageView(pageNumber - 1);
+    if (!pageView || !pageView.viewport || !pageView.pdfPage || !pageView.div) return null;
+
+    return pageView;
+}
+
+/**
+ * Converts a point in PDF user space to normalised 0..1 coordinates against the
+ * unrotated page box, with a top-left origin.
+ *
+ * Going via PDF user space rather than screen pixels is what makes a stored
+ * highlight independent of zoom and rotation. `view` is [x0, y0, x1, y1].
+ */
+function toNormalisedPoint(view, x, y) {
+    const width = view[2] - view[0];
+    const height = view[3] - view[1];
+
+    return {
+        x: width === 0 ? 0 : (x - view[0]) / width,
+        // PDF user space has a bottom-left origin, flip it so rendering is top-left.
+        y: height === 0 ? 0 : (view[3] - y) / height
+    };
+}
+
+/** Inverse of [toNormalisedPoint]. Returns a point in PDF user space. */
+function fromNormalisedPoint(view, nx, ny) {
+    const width = view[2] - view[0];
+    const height = view[3] - view[1];
+
+    return [view[0] + nx * width, view[3] - ny * height];
+}
+
+/**
+ * Top-left of a page's content box in client coordinates.
+ *
+ * getBoundingClientRect reports the border box, but `.page` carries a 9px
+ * transparent border (--page-border), and the viewport transform is relative to the
+ * content box. The overlay layer is absolutely positioned, so it anchors to the
+ * padding box too. Measuring from the border box instead pushed every highlight
+ * down and right by the border width, which read as an underline sitting below the
+ * words rather than a fill over them.
+ */
+function contentBoxOrigin(element, bounds) {
+    const style = getComputedStyle(element);
+
+    return {
+        x: bounds.left + (parseFloat(style.borderLeftWidth) || 0),
+        y: bounds.top + (parseFloat(style.borderTopWidth) || 0)
+    };
+}
+
+/** True when the centre of `rect` falls inside `bounds`. */
+function rectCentreWithin(rect, bounds) {
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+
+    return cx >= bounds.left && cx <= bounds.right && cy >= bounds.top && cy <= bounds.bottom;
+}
+
+/**
+ * Describes the current text selection as JSON, or "" when there is nothing
+ * usable selected.
+ *
+ * Shape: {"page": 12, "text": "...", "quads": [{"x":..,"y":..,"w":..,"h":..}]}
+ *
+ * One quad per line, because a selection spanning several lines produces one
+ * client rect per line and a single bounding box would cover the gaps.
+ */
+function getSelectionInfo() {
+    const selection = document.getSelection();
+    if (!selection || selection.isCollapsed || selection.rangeCount === 0) return "";
+
+    const text = selection.toString();
+    if (!text.trim()) return "";
+
+    const range = selection.getRangeAt(0);
+    let node = range.commonAncestorContainer;
+    if (node && node.nodeType === Node.TEXT_NODE) node = node.parentElement;
+
+    const pageElement = node && node.closest ? node.closest(".page") : null;
+    if (!pageElement || !pageElement.dataset.pageNumber) return "";
+
+    const pageNumber = parseInt(pageElement.dataset.pageNumber, 10);
+    const pageView = getHighlightPageView(pageNumber);
+    if (!pageView) return "";
+
+    const view = pageView.pdfPage.view;
+    const viewport = pageView.viewport;
+    const pageBounds = pageElement.getBoundingClientRect();
+    const pageOrigin = contentBoxOrigin(pageElement, pageBounds);
+
+    const quads = [];
+    for (const rect of range.getClientRects()) {
+        if (rect.width <= 0 || rect.height <= 0) continue;
+
+        // A selection can run across a page boundary. Anything outside this page is
+        // dropped rather than converted with the wrong page's viewport, which would
+        // place it somewhere arbitrary.
+        if (!rectCentreWithin(rect, pageBounds)) continue;
+
+        const topLeft = viewport.convertToPdfPoint(
+            rect.left - pageOrigin.x,
+            rect.top - pageOrigin.y
+        );
+        const bottomRight = viewport.convertToPdfPoint(
+            rect.right - pageOrigin.x,
+            rect.bottom - pageOrigin.y
+        );
+
+        const a = toNormalisedPoint(view, topLeft[0], topLeft[1]);
+        const b = toNormalisedPoint(view, bottomRight[0], bottomRight[1]);
+
+        const width = Math.abs(b.x - a.x);
+        const height = Math.abs(b.y - a.y);
+        if (width <= 0 || height <= 0) continue;
+
+        quads.push({
+            x: Math.min(a.x, b.x),
+            y: Math.min(a.y, b.y),
+            w: width,
+            h: height
+        });
+    }
+
+    if (quads.length === 0) return "";
+
+    // Where the selection sits within the viewer, in CSS pixels. The app anchors its
+    // own action bar to this, so it needs viewer coordinates rather than the
+    // normalised page coordinates the quads use.
+    const container = document.getElementById("viewerContainer");
+    const containerBounds = container.getBoundingClientRect();
+    let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
+    for (const rect of range.getClientRects()) {
+        if (rect.width <= 0 || rect.height <= 0) continue;
+        left = Math.min(left, rect.left);
+        top = Math.min(top, rect.top);
+        right = Math.max(right, rect.right);
+        bottom = Math.max(bottom, rect.bottom);
+    }
+
+    const anchor = left === Infinity ? null : {
+        x: left - containerBounds.left,
+        y: top - containerBounds.top,
+        w: right - left,
+        h: bottom - top
+    };
+
+    return JSON.stringify({ page: pageNumber, text: text, quads: quads, anchor: anchor });
+}
+
+/** Clears the current selection without disturbing anything else. */
+function clearSelectionInfo() {
+    const selection = document.getSelection();
+    if (selection) selection.removeAllRanges();
+}
+
+function setupSelectionReporting() {
+    document.addEventListener("selectionchange", () => {
+        clearTimeout(selectionNotifyTimer);
+        selectionNotifyTimer = setTimeout(() => {
+            JWI.onTextSelected(getSelectionInfo());
+        }, SELECTION_DEBOUNCE_MS);
+    });
+}
+
+// Stored highlights for the open document, keyed by 1-based page number.
+const storedHighlights = new Map();
+
+const HIGHLIGHT_LAYER_CLASS = "jwi-highlight-layer";
+const HIGHLIGHT_CLASS = "jwi-highlight";
+
+/**
+ * The overlay layer for a page, created on first use.
+ *
+ * Inserted straight after the canvas wrapper so it sits below the text layer in
+ * paint order. Combined with `pointer-events: none` in helper.css, that keeps text
+ * selection working normally over the top of a highlight.
+ */
+function ensureHighlightLayer(pageElement) {
+    let layer = pageElement.querySelector("." + HIGHLIGHT_LAYER_CLASS);
+    if (layer) return layer;
+
+    layer = document.createElement("div");
+    layer.className = HIGHLIGHT_LAYER_CLASS;
+
+    const canvasWrapper = pageElement.querySelector(".canvasWrapper");
+    if (canvasWrapper && canvasWrapper.nextSibling) {
+        pageElement.insertBefore(layer, canvasWrapper.nextSibling);
+    } else {
+        pageElement.appendChild(layer);
+    }
+
+    return layer;
+}
+
+function removeAllChildren(element) {
+    while (element.firstChild) element.removeChild(element.firstChild);
+}
+
+/**
+ * Draws the stored highlights for one page.
+ *
+ * Always clears first. Pages are virtualised and re-render on scroll, so without
+ * that the same highlight stacks up every time the page comes back into view.
+ */
+function renderHighlightsForPage(pageNumber) {
+    const pageView = getHighlightPageView(pageNumber);
+    if (!pageView) return;
+
+    const layer = ensureHighlightLayer(pageView.div);
+    removeAllChildren(layer);
+
+    const items = storedHighlights.get(pageNumber);
+    if (!items || items.length === 0) return;
+
+    const view = pageView.pdfPage.view;
+    const viewport = pageView.viewport;
+
+    for (const item of items) {
+        if (!item.quads) continue;
+
+        for (const quad of item.quads) {
+            const topLeft = fromNormalisedPoint(view, quad.x, quad.y);
+            const bottomRight = fromNormalisedPoint(view, quad.x + quad.w, quad.y + quad.h);
+
+            const a = viewport.convertToViewportPoint(topLeft[0], topLeft[1]);
+            const b = viewport.convertToViewportPoint(bottomRight[0], bottomRight[1]);
+
+            const element = document.createElement("div");
+            element.className = HIGHLIGHT_CLASS;
+            element.dataset.highlightId = item.id;
+            element.style.left = Math.min(a[0], b[0]) + "px";
+            element.style.top = Math.min(a[1], b[1]) + "px";
+            element.style.width = Math.abs(b[0] - a[0]) + "px";
+            element.style.height = Math.abs(b[1] - a[1]) + "px";
+            element.style.backgroundColor = item.color;
+
+            layer.appendChild(element);
+        }
+    }
+}
+
+/** Redraws every page that currently has a highlight layer. */
+function refreshRenderedHighlights() {
+    for (const pageNumber of storedHighlights.keys()) {
+        renderHighlightsForPage(pageNumber);
+    }
+}
+
+/** Empties every layer, including pages that no longer have any highlights. */
+function clearRenderedHighlights() {
+    const layers = document.querySelectorAll("." + HIGHLIGHT_LAYER_CLASS);
+    for (const layer of layers) removeAllChildren(layer);
+}
+
+/**
+ * Replaces the highlight set for the whole document.
+ *
+ * @param json A JSON array of
+ * `{"id": 1, "page": 12, "color": "rgba(...)", "quads": [...]}`.
+ */
+function applyStoredHighlights(json) {
+    let items = [];
+    try {
+        items = JSON.parse(json) || [];
+    } catch (e) {
+        console.error("Error parsing highlights:", e);
+        items = [];
+    }
+
+    // Clear before repopulating, so highlights deleted since the last call do not
+    // linger on pages that have dropped out of the new set entirely.
+    clearRenderedHighlights();
+    storedHighlights.clear();
+
+    for (const item of items) {
+        if (!storedHighlights.has(item.page)) storedHighlights.set(item.page, []);
+        storedHighlights.get(item.page).push(item);
+    }
+
+    refreshRenderedHighlights();
+}
+
+/**
+ * Scrolls a normalised quad on a page into the middle of the view.
+ *
+ * Used for highlights the document itself carries. Those are painted by the viewer's
+ * annotation layer rather than our overlay, so there is no element of ours to scroll
+ * to, and jumping to the page alone can leave the highlight just off screen.
+ */
+function scrollToPageQuad(pageNumber, x, y, w, h) {
+    const pageView = getHighlightPageView(pageNumber);
+    if (!pageView) return false;
+
+    const view = pageView.pdfPage.view;
+    const viewport = pageView.viewport;
+
+    const topLeft = fromNormalisedPoint(view, x, y);
+    const bottomRight = fromNormalisedPoint(view, x + w, y + h);
+    const a = viewport.convertToViewportPoint(topLeft[0], topLeft[1]);
+    const b = viewport.convertToViewportPoint(bottomRight[0], bottomRight[1]);
+
+    const top = Math.min(a[1], b[1]);
+    const height = Math.abs(b[1] - a[1]);
+
+    const container = document.getElementById("viewerContainer");
+    if (!container) return false;
+
+    const target = pageView.div.offsetTop + top - (container.clientHeight - height) / 2;
+    container.scrollTo({ top: Math.max(0, target), behavior: "smooth" });
+
+    return true;
+}
+
+/** Scrolls a highlight into view and pulses it so the user can spot it. */
+function scrollToHighlight(highlightId) {
+    const element = document.querySelector(
+        `.${HIGHLIGHT_CLASS}[data-highlight-id="${highlightId}"]`
+    );
+    if (!element) return false;
+
+    element.scrollIntoView({ block: "center", behavior: "smooth" });
+    element.classList.remove("jwi-highlight-pulse");
+    // Force a reflow so the animation restarts when the same highlight is
+    // selected twice in a row.
+    void element.offsetWidth;
+    element.classList.add("jwi-highlight-pulse");
+
+    return true;
+}
+
+/**
+ * Finds the highlight under a viewport point, or "" when there is none.
+ *
+ * Hit testing by hand rather than with pointer events, because the layer has to
+ * stay `pointer-events: none` for text selection to keep working through it.
+ *
+ * Returns JSON of `{id, x, y, w, h}`, where the rectangle is the union of every
+ * piece of that highlight in viewer coordinates. The app anchors its action bar to
+ * it, the same way it does for a selection, so a multi-line highlight anchors to the
+ * whole thing rather than to whichever line happened to be tapped.
+ */
+function highlightAnchorAtPoint(x, y) {
+    const elements = document.querySelectorAll("." + HIGHLIGHT_CLASS);
+
+    let hitId = null;
+    for (const element of elements) {
+        const bounds = element.getBoundingClientRect();
+        if (x >= bounds.left && x <= bounds.right && y >= bounds.top && y <= bounds.bottom) {
+            hitId = element.dataset.highlightId || null;
+            break;
+        }
+    }
+    if (!hitId) return "";
+
+    const container = document.getElementById("viewerContainer");
+    const containerBounds = container.getBoundingClientRect();
+    let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
+
+    for (const element of document.querySelectorAll(
+        `.${HIGHLIGHT_CLASS}[data-highlight-id="${hitId}"]`
+    )) {
+        const b = element.getBoundingClientRect();
+        left = Math.min(left, b.left);
+        top = Math.min(top, b.top);
+        right = Math.max(right, b.right);
+        bottom = Math.max(bottom, b.bottom);
+    }
+
+    return JSON.stringify({
+        id: hitId,
+        x: left - containerBounds.left,
+        y: top - containerBounds.top,
+        w: right - left,
+        h: bottom - top
+    });
+}
+
+// #endregion
+
+// #region horizontal scroll lock (#74)
+
+// Freezes horizontal panning at whatever position the page is on when the lock is
+// switched on, rather than at the centre. Someone who has panned to a particular
+// column wants to stay there, and re-centring would move them off it.
+const horizontalScrollLock = {
+    enabled: false,
+    position: 0
+};
+
+function isHorizontalScrollMode() {
+    const viewer = PDFViewerApplication.pdfViewer;
+    return !!viewer && viewer.scrollMode === ScrollMode.HORIZONTAL;
+}
+
+/**
+ * Turns the lock on at the current horizontal position, or off.
+ *
+ * Refuses to engage in horizontal scroll mode: that is the axis the document
+ * scrolls along, and locking it would strand the reader on one page.
+ *
+ * @return true if the lock is now on.
+ */
+function setHorizontalScrollLock(enabled) {
+    const container = document.getElementById("viewerContainer");
+    if (!container) return false;
+
+    if (!enabled || isHorizontalScrollMode()) {
+        horizontalScrollLock.enabled = false;
+        return false;
+    }
+
+    horizontalScrollLock.enabled = true;
+    horizontalScrollLock.position = container.scrollLeft;
+    return true;
+}
+
+function isHorizontalScrollLocked() {
+    return horizontalScrollLock.enabled;
+}
+
+/** Keeps the frozen position reachable after a zoom changes the scrollable width. */
+function clampHorizontalScrollLock() {
+    if (!horizontalScrollLock.enabled) return;
+
+    const container = document.getElementById("viewerContainer");
+    if (!container) return;
+
+    const maxScroll = Math.max(0, container.scrollWidth - container.clientWidth);
+    horizontalScrollLock.position = Math.min(horizontalScrollLock.position, maxScroll);
+}
+
+function setupHorizontalScrollLock() {
+    const container = document.getElementById("viewerContainer");
+    if (!container) return;
+
+    // Restoring on scroll rather than setting overflow-x: hidden, because hiding
+    // the overflow clamps scrollLeft to 0 and would throw the reader back to the
+    // left edge instead of holding the position they picked.
+    container.addEventListener("scroll", () => {
+        if (!horizontalScrollLock.enabled) return;
+        if (isHorizontalScrollMode()) return;
+        if (container.scrollLeft !== horizontalScrollLock.position) {
+            container.scrollLeft = horizontalScrollLock.position;
+        }
+    }, { passive: true });
+
+    const eventBus = PDFViewerApplication.eventBus;
+    if (!eventBus) return;
+
+    // Zoom changes the scrollable width, so the frozen position can fall outside it.
+    eventBus.on("scalechanging", () => setTimeout(clampHorizontalScrollLock, 0));
+
+    // Switching to horizontal scroll mode has to release the lock, or the document
+    // cannot be read at all.
+    eventBus.on("scrollmodechanged", () => {
+        if (isHorizontalScrollMode()) horizontalScrollLock.enabled = false;
+    });
+}
+// #endregion
+
+// #region highlight rendering
+
+function setupHighlightRendering() {
+    const eventBus = PDFViewerApplication.eventBus;
+    if (!eventBus) return;
+
+    // Pages are virtualised, so this fires again every time a page scrolls back in.
+    eventBus.on("pagerendered", (event) => renderHighlightsForPage(event.pageNumber));
+
+    // Zoom and rotation both change the viewport transform, so every quad has to be
+    // reprojected. Deferred a tick so the new viewport is in place before we read it.
+    eventBus.on("scalechanging", () => setTimeout(refreshRenderedHighlights, 0));
+    eventBus.on("rotationchanging", () => setTimeout(refreshRenderedHighlights, 0));
+}
+// #endregion
+
+// #region highlights already in the document (#41)
+
+/**
+ * Reads the Highlight annotations the PDF itself carries.
+ *
+ * These belong to the file rather than the app, so they are surfaced read only:
+ * listed, navigable and searchable, but not editable. PDF.js already paints them
+ * through its annotation layer, so they are deliberately not added to our overlay,
+ * which would draw them a second time.
+ *
+ * Quads come back as a flat Float32Array, eight numbers per quad in the order
+ * upper-left, upper-right, lower-left, lower-right, in PDF user space. They are
+ * converted to the same normalised, top-left form the app stores its own in.
+ */
+async function loadDocumentHighlights() {
+    const document_ = PDFViewerApplication.pdfDocument;
+    if (!document_) {
+        JWI.onDocumentHighlightsLoaded(JSON.stringify([]));
+        return;
+    }
+
+    const results = [];
+
+    try {
+        for (let pageNumber = 1; pageNumber <= document_.numPages; pageNumber++) {
+            const page = await document_.getPage(pageNumber);
+            const annotations = await page.getAnnotations();
+            const highlights = annotations.filter((a) => a.subtype === "Highlight");
+            if (highlights.length === 0) continue;
+
+            const view = page.view;
+            const pageWidth = view[2] - view[0];
+            const pageHeight = view[3] - view[1];
+            if (pageWidth <= 0 || pageHeight <= 0) continue;
+
+            const textContent = await page.getTextContent();
+
+            highlights.forEach((annotation, index) => {
+                const points = annotation.quadPoints;
+                if (!points || points.length < 8) return;
+
+                const quads = [];
+                const boxes = [];
+                for (let i = 0; i + 7 < points.length; i += 8) {
+                    const left = points[i];
+                    const top = points[i + 1];
+                    const right = points[i + 2];
+                    const bottom = points[i + 5];
+                    if (right <= left || top <= bottom) continue;
+
+                    boxes.push({ left, right, top, bottom });
+                    quads.push({
+                        x: (left - view[0]) / pageWidth,
+                        y: (view[3] - top) / pageHeight,
+                        w: (right - left) / pageWidth,
+                        h: (top - bottom) / pageHeight
+                    });
+                }
+                if (quads.length === 0) return;
+
+                results.push({
+                    // Stable within a document, and distinct from the app's own
+                    // database ids, which are positive.
+                    id: -(pageNumber * 1000 + index + 1),
+                    page: pageNumber,
+                    color: rgbArrayToArgb(annotation.color),
+                    text: textUnderBoxes(textContent, boxes),
+                    note: (annotation.contentsObj && annotation.contentsObj.str) || "",
+                    label: (annotation.titleObj && annotation.titleObj.str) || "",
+                    quads: quads
+                });
+            });
+        }
+    } catch (e) {
+        console.error("Error reading document highlights:", e);
+    }
+
+    JWI.onDocumentHighlightsLoaded(JSON.stringify(results));
+}
+
+/** Packs pdf.js's [r, g, b] into the ARGB int the app stores colours as. */
+function rgbArrayToArgb(color) {
+    if (!color || color.length < 3) return -1;
+    return (0xff << 24 | color[0] << 16 | color[1] << 8 | color[2]) | 0;
+}
+
+/**
+ * Recovers the text sitting under a highlight.
+ *
+ * The annotation records where it is, not what it covers, so the words have to be
+ * read back off the page. Without them the panel would list blank rows and search
+ * would never match a highlight that came with the file.
+ */
+function textUnderBoxes(textContent, boxes) {
+    const parts = [];
+
+    for (const item of textContent.items) {
+        if (!item.str || !item.transform) continue;
+
+        const left = item.transform[4];
+        const width = item.width || 0;
+        const right = left + width;
+        const baseline = item.transform[5];
+        const middle = baseline + (item.height || 0) / 2;
+
+        for (const box of boxes) {
+            const withinY = middle <= box.top && middle >= box.bottom;
+            if (!withinY) continue;
+
+            const overlapLeft = Math.max(left, box.left);
+            const overlapRight = Math.min(right, box.right);
+            if (overlapRight <= overlapLeft) continue;
+
+            parts.push(sliceByOverlap(item.str, left, width, overlapLeft, overlapRight));
+            break;
+        }
+    }
+
+    return parts.join(" ").replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Takes the part of a text run that a highlight actually covers.
+ *
+ * pdf.js hands back one item per text-showing operator, which is usually a whole
+ * line, so a highlight over a single word would otherwise report the entire line.
+ * Character positions are not available, so each word's position is estimated from
+ * how far along the run it starts, and a word is kept when its midpoint falls inside
+ * the highlight.
+ *
+ * Testing the midpoint rather than snapping the edges outwards matters: snapping
+ * outwards turned a highlight on one word into that word plus its neighbours,
+ * because an estimate landing slightly early swallowed the whole preceding word.
+ * Still an estimate for proportional fonts, but wrong by a fraction of a word
+ * rather than a whole one.
+ */
+function sliceByOverlap(text, left, width, overlapLeft, overlapRight) {
+    if (width <= 0 || text.length === 0) return text;
+    if (overlapLeft <= left && overlapRight >= left + width) return text;
+
+    const perCharacter = width / text.length;
+    const kept = [];
+    const word = /\S+/g;
+
+    let match;
+    while ((match = word.exec(text)) !== null) {
+        const wordLeft = left + match.index * perCharacter;
+        const wordRight = left + (match.index + match[0].length) * perCharacter;
+        const middle = (wordLeft + wordRight) / 2;
+
+        if (middle >= overlapLeft && middle <= overlapRight) kept.push(match[0]);
+    }
+
+    return kept.length > 0 ? kept.join(" ") : text;
+}
+// #endregion

@@ -38,5 +38,8 @@ try {
         onEditorStateChange() { },
         onOutlineLoaded() { },
         onAttachmentsLoaded() { },
+        onTextSelected() { },
+        onHighlightTapped() { },
+        onDocumentHighlightsLoaded() { },
     };
 }
