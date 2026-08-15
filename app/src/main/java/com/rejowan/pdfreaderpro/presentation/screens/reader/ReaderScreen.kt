@@ -479,8 +479,9 @@ fun ReaderScreen(
                     modifier = Modifier.align(Alignment.TopStart)
                 )
 
-                // Highlight navigation strip, sits at the top so it does not collide
-                // with the colour picker or the control bar at the bottom.
+                // Highlight navigation strip, above the control bar. Jumping to a
+                // highlight brings it near the top of the view, so a strip up there
+                // covered the very thing it had just navigated to.
                 HighlightNavBar(
                     isVisible = state.isHighlightNavVisible && !state.isHighlightPickerVisible,
                     positionLabel = state.highlightPositionLabel,
@@ -488,9 +489,9 @@ fun ReaderScreen(
                     onNext = { viewModel.onAction(ReaderAction.NextHighlight) },
                     onClose = { viewModel.onAction(ReaderAction.HideHighlightNav) },
                     modifier = Modifier
-                        .align(Alignment.TopCenter)
-                        .windowInsetsPadding(WindowInsets.statusBars)
-                        .padding(top = if (state.isToolbarVisible && !state.isFullScreen) 72.dp else 16.dp)
+                        .align(Alignment.BottomCenter)
+                        .windowInsetsPadding(WindowInsets.navigationBars)
+                        .padding(bottom = if (state.isToolbarVisible && !state.isFullScreen) 96.dp else 24.dp)
                 )
 
                 // Floating control bar at bottom

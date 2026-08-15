@@ -36,6 +36,7 @@ import com.rejowan.pdfreaderpro.presentation.components.pdf.js.toJsHex
 import com.rejowan.pdfreaderpro.presentation.components.pdf.js.toJsRgba
 import com.rejowan.pdfreaderpro.presentation.components.pdf.js.toJsString
 import com.rejowan.pdfreaderpro.presentation.components.pdf.js.with
+import com.rejowan.pdfreaderpro.presentation.components.pdf.model.PdfQuad
 import com.rejowan.pdfreaderpro.presentation.components.pdf.model.RenderedHighlight
 import com.rejowan.pdfreaderpro.presentation.components.pdf.model.SideBarTreeItem
 import com.rejowan.pdfreaderpro.presentation.components.pdf.model.TextSelection
@@ -1757,6 +1758,19 @@ class PdfViewer @JvmOverloads constructor(
      */
     fun removeTextSelection() {
         webView callDirectly "window.getSelection().removeAllRanges"()
+    }
+
+    /**
+     * Scrolls a region of a page into the middle of the view.
+     *
+     * For highlights the document itself carries, which the viewer's annotation layer
+     * paints rather than our overlay, so [scrollToHighlight] has no element to find.
+     *
+     * @param pageNumber 1-based.
+     * @param quad Normalised to the unrotated page box, top-left origin.
+     */
+    fun scrollToPageQuad(pageNumber: Int, quad: PdfQuad) {
+        webView callDirectly "scrollToPageQuad"(pageNumber, quad.x, quad.y, quad.w, quad.h)
     }
 
     /**

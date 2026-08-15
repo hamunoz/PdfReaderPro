@@ -1538,6 +1538,37 @@ function applyStoredHighlights(json) {
     refreshRenderedHighlights();
 }
 
+/**
+ * Scrolls a normalised quad on a page into the middle of the view.
+ *
+ * Used for highlights the document itself carries. Those are painted by the viewer's
+ * annotation layer rather than our overlay, so there is no element of ours to scroll
+ * to, and jumping to the page alone can leave the highlight just off screen.
+ */
+function scrollToPageQuad(pageNumber, x, y, w, h) {
+    const pageView = getHighlightPageView(pageNumber);
+    if (!pageView) return false;
+
+    const view = pageView.pdfPage.view;
+    const viewport = pageView.viewport;
+
+    const topLeft = fromNormalisedPoint(view, x, y);
+    const bottomRight = fromNormalisedPoint(view, x + w, y + h);
+    const a = viewport.convertToViewportPoint(topLeft[0], topLeft[1]);
+    const b = viewport.convertToViewportPoint(bottomRight[0], bottomRight[1]);
+
+    const top = Math.min(a[1], b[1]);
+    const height = Math.abs(b[1] - a[1]);
+
+    const container = document.getElementById("viewerContainer");
+    if (!container) return false;
+
+    const target = pageView.div.offsetTop + top - (container.clientHeight - height) / 2;
+    container.scrollTo({ top: Math.max(0, target), behavior: "smooth" });
+
+    return true;
+}
+
 /** Scrolls a highlight into view and pulses it so the user can spot it. */
 function scrollToHighlight(highlightId) {
     const element = document.querySelector(

@@ -294,16 +294,25 @@ class ReaderViewModel(
         // Viewer pages are 1-based.
         viewer.goToPage(highlight.pageNumber + 1)
 
-        // The document's own highlights are painted by the viewer's annotation
-        // layer, not by our overlay, so there is no element of ours to pulse. The
-        // page jump still lands the reader on them.
-        if (!highlight.isEditable) return
-
         viewModelScope.launch {
-            // scrollToHighlight only finds an element on a rendered page, and goToPage
-            // does not render synchronously.
+            // Neither path can run until the page has rendered, and goToPage does not
+            // render synchronously.
             delay(HIGHLIGHT_SCROLL_DELAY_MS)
-            viewer.scrollToHighlight(highlight.id)
+
+            if (highlight.isEditable) {
+                viewer.scrollToHighlight(highlight.id)
+            } else {
+                // Painted by the viewer's annotation layer rather than our overlay, so
+                // there is no element of ours to find. Scroll to the quad instead,
+                // otherwise a jump lands on the page and leaves the highlight off
+                // screen. No pulse, for the same reason.
+                highlight.quads.firstOrNull()?.let { quad ->
+                    viewer.scrollToPageQuad(
+                        pageNumber = highlight.pageNumber + 1,
+                        quad = PdfQuad(quad.x, quad.y, quad.w, quad.h)
+                    )
+                }
+            }
         }
     }
 
